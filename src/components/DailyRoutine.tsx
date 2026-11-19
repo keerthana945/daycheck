@@ -104,14 +104,17 @@ export function DailyRoutine({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+    <div className="space-y-7">
+      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-5 border-b border-[#E8E1D7]">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-[#1F1A17] text-balance">
+          <p className="text-xs font-medium tracking-wide text-[#800020]">
+            Chronological Flow
+          </p>
+          <h1 className="mt-1.5 text-3xl sm:text-4xl font-medium tracking-[-0.02em] text-[#292522] text-balance">
             Daily Routine
           </h1>
-          <p className="mt-1 text-sm text-[#6B625B]">
-            Your editable daily timetable. Tap any row to check it off, or customize times to fit your day.
+          <p className="mt-1.5 text-sm text-[#6E6359]">
+            Your editable daily timetable. Tap any block to check it off, or adjust times to fit your day.
           </p>
         </div>
 
@@ -120,32 +123,32 @@ export function DailyRoutine({
             type="button"
             onClick={onClearCheckmarks}
             disabled={completedCount === 0}
-            className="px-3.5 py-2 rounded-xl text-xs font-medium border border-[#E6DDD0] bg-white text-[#6B625B] hover:text-[#1F1A17] hover:bg-[#F2ECE3] disabled:opacity-45 disabled:pointer-events-none transition-colors whitespace-nowrap"
+            className="px-3.5 py-2 rounded-xl text-xs font-medium border border-[#E8E1D7] bg-[#FFFDF9] text-[#6E6359] hover:text-[#292522] hover:bg-[#F8F5F0] disabled:opacity-45 disabled:pointer-events-none transition-colors whitespace-nowrap"
           >
             Uncheck All
           </button>
           <button
             type="button"
             onClick={onResetDefaultRoutine}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium border border-[#E6DDD0] bg-white text-[#1F1A17] hover:bg-[#F2ECE3] transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium border border-[#E8E1D7] bg-[#FFFDF9] text-[#292522] hover:border-[#A69A8D] transition-colors whitespace-nowrap"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-3.5 h-3.5 text-[#800020]" />
             <span>Default Routine</span>
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Inline Quick-Add Routine Activity */}
       <form
         onSubmit={handleQuickAdd}
-        className="rounded-2xl bg-white border border-[#E6DDD0] p-3 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+        className="rounded-3xl bg-[#FFFDF9] border border-[#E8E1D7] p-4 sm:p-5 shadow-[0_1px_4px_rgba(41,37,34,0.04)] flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
       >
         <input
           type="time"
           value={quickTime}
           onChange={(e) => setQuickTime(e.target.value)}
           aria-label="Activity time"
-          className="px-3 py-2.5 rounded-xl bg-[#FAF7F2] border border-[#E6DDD0] text-xs font-mono text-[#1F1A17] focus:outline-none focus:border-[#6D1D2C]"
+          className="px-3 py-2.5 rounded-xl bg-[#F8F5F0] border border-[#E8E1D7] text-xs font-mono text-[#292522] focus:outline-none focus:border-[#800020]"
         />
         <input
           type="text"
@@ -153,13 +156,13 @@ export function DailyRoutine({
           onChange={(e) => setQuickTitle(e.target.value)}
           placeholder="Add an activity to your timetable..."
           aria-label="New routine activity"
-          className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#FAF7F2] border border-[#E6DDD0] text-sm text-[#1F1A17] placeholder:text-[#9A9086] focus:outline-none focus:border-[#6D1D2C]"
+          className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#F8F5F0] border border-[#E8E1D7] text-sm text-[#292522] placeholder:text-[#A69A8D] focus:outline-none focus:border-[#800020]"
         />
         <select
           value={quickCat}
           onChange={(e) => setQuickCat(e.target.value as RoutineCategory)}
           aria-label="Activity category"
-          className="px-3 py-2.5 rounded-xl bg-[#FAF7F2] border border-[#E6DDD0] text-xs text-[#1F1A17] focus:outline-none focus:border-[#6D1D2C]"
+          className="px-3 py-2.5 rounded-xl bg-[#F8F5F0] border border-[#E8E1D7] text-xs text-[#292522] focus:outline-none focus:border-[#800020]"
         >
           {ROUTINE_CATEGORIES.map((c) => (
             <option key={c} value={c}>
@@ -170,7 +173,7 @@ export function DailyRoutine({
         <button
           type="submit"
           disabled={!quickTitle.trim()}
-          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium bg-[#6D1D2C] text-white hover:bg-[#551521] disabled:opacity-45 transition-colors whitespace-nowrap"
+          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium bg-[#800020] text-[#FFFDF9] hover:bg-[#66001A] disabled:opacity-40 transition-colors whitespace-nowrap"
         >
           <Plus className="w-4 h-4" />
           <span>Add</span>
@@ -178,134 +181,154 @@ export function DailyRoutine({
       </form>
 
       {/* Progress Line */}
-      <div className="flex items-center gap-3 px-1">
-        <div className="w-full max-w-xs h-2 rounded-full bg-[#E6DDD0] overflow-hidden">
+      <div className="flex items-center gap-3.5 px-1">
+        <div className="w-full max-w-xs h-2 rounded-full bg-[#EAE2D6] overflow-hidden">
           <div
-            className="h-full rounded-full bg-[#6D1D2C] transition-all duration-300"
+            className="h-full rounded-full bg-[#800020] transition-all duration-300"
             style={{ width: `${pct}%` }}
           />
         </div>
-        <span className="text-xs font-mono text-[#6B625B] tabular-nums">
+        <span className="text-xs font-mono text-[#6E6359] tabular-nums">
           {completedCount}/{routine.length} completed ({pct}%)
         </span>
       </div>
 
-      {/* Timetable */}
-      <div className="rounded-2xl bg-white border border-[#E6DDD0] divide-y divide-[#F2ECE3] overflow-hidden">
+      {/* Editorial Timeline Timetable */}
+      <div className="rounded-3xl bg-[#FFFDF9] border border-[#E8E1D7] p-4 sm:p-6 shadow-[0_1px_4px_rgba(41,37,34,0.04)]">
         {sortedRoutine.length === 0 ? (
           <div className="px-6 py-12 text-center">
-            <div className="mx-auto w-10 h-10 rounded-xl bg-[#F2ECE3] flex items-center justify-center text-[#6D1D2C]">
+            <div className="mx-auto w-11 h-11 rounded-2xl bg-[#FAF3F1] border border-[#EAD9D8] flex items-center justify-center text-[#800020]">
               <Clock3 className="w-5 h-5" />
             </div>
-            <h2 className="mt-3 text-base font-semibold text-[#1F1A17]">Timetable is empty</h2>
-            <p className="mt-1 text-sm text-[#6B625B]">
+            <h2 className="mt-3 text-base font-medium text-[#292522]">Timetable is empty</h2>
+            <p className="mt-1 text-sm text-[#6E6359]">
               Add activities above or restore the default 9:00 AM – 10:30 PM routine.
             </p>
             <button
               type="button"
               onClick={onResetDefaultRoutine}
-              className="mt-4 px-4 py-2 rounded-xl text-sm font-medium bg-[#6D1D2C] text-white hover:bg-[#551521] transition-colors"
+              className="mt-4 px-4 py-2 rounded-xl text-sm font-medium bg-[#800020] text-[#FFFDF9] hover:bg-[#66001A] transition-colors"
             >
               Restore Default Routine
             </button>
           </div>
         ) : (
-          sortedRoutine.map((item) => {
-            const isUpNext = item.id === nextBlockId;
-            return (
-              <div
-                key={item.id}
-                className={`flex items-start justify-between gap-4 px-5 py-4 transition-colors ${
-                  isUpNext ? 'bg-[#FAF7F2]' : 'hover:bg-[#FAF7F2]/60'
-                } ${item.completed ? 'opacity-55' : ''}`}
-              >
-                <button
-                  type="button"
-                  onClick={() => onToggleRoutine(item.id)}
-                  className="flex items-start gap-3.5 min-w-0 flex-1 text-left group"
+          <div>
+            {sortedRoutine.map((item, idx) => {
+              const isUpNext = item.id === nextBlockId;
+              const isLast = idx === sortedRoutine.length - 1;
+              return (
+                <div
+                  key={item.id}
+                  className={`relative flex items-start justify-between gap-3 rounded-2xl px-3 py-3 transition-colors ${
+                    isUpNext ? 'bg-[#FAF3F1]/80' : 'hover:bg-[#F8F5F0]/75'
+                  }`}
                 >
-                  <span
-                    className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
-                      item.completed
-                        ? 'bg-[#2D6A4F] border-[#2D6A4F] text-white'
-                        : 'border-[#CFC5B8] bg-white group-hover:border-[#6D1D2C]'
-                    }`}
-                  >
-                    {item.completed && <Check className="w-3.5 h-3.5" />}
-                  </span>
+                  {!isLast && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-[21px] top-9 -bottom-2 w-px bg-[#E8E1D7]"
+                    />
+                  )}
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                      <span className="font-mono text-sm font-medium text-[#6D1D2C] w-20 shrink-0 tabular-nums">
-                        {formatTime12h(item.time)}
-                      </span>
-                      <span
-                        className={`text-sm sm:text-base font-medium ${
-                          item.completed ? 'line-through text-[#6B625B]' : 'text-[#1F1A17]'
-                        }`}
-                      >
-                        {item.title}
-                      </span>
-                      {isUpNext && (
-                        <span className="text-xs font-medium text-[#6D1D2C]">· Up next</span>
+                  <button
+                    type="button"
+                    onClick={() => onToggleRoutine(item.id)}
+                    className="flex items-start gap-3.5 min-w-0 flex-1 text-left group"
+                  >
+                    <span
+                      className={`relative z-10 mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                        item.completed
+                          ? 'bg-[#800020] border-[#800020] text-[#FFFDF9]'
+                          : isUpNext
+                            ? 'border-[#800020] bg-[#FFFDF9] ring-3 ring-[#800020]/10'
+                            : 'border-[#CFC5B8] bg-[#FFFDF9] group-hover:border-[#800020]'
+                      }`}
+                    >
+                      {item.completed && <Check className="w-3 h-3" />}
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                        <span
+                          className={`font-mono text-xs sm:text-sm font-medium w-20 shrink-0 tabular-nums ${
+                            item.completed ? 'text-[#8C8278]' : 'text-[#800020]'
+                          }`}
+                        >
+                          {formatTime12h(item.time)}
+                        </span>
+                        <span
+                          className={`text-sm sm:text-base font-medium ${
+                            item.completed ? 'line-through text-[#8C8278]' : 'text-[#292522]'
+                          }`}
+                        >
+                          {item.title}
+                        </span>
+                        {isUpNext && (
+                          <span className="text-xs font-medium text-[#800020]">· Up next</span>
+                        )}
+                      </div>
+                      {(item.notes || item.category) && (
+                        <p
+                          className={`mt-0.5 sm:pl-[92px] text-xs ${
+                            item.completed ? 'text-[#A69A8D]' : 'text-[#6E6359]'
+                          }`}
+                        >
+                          <span>{item.category}</span>
+                          {item.notes && (
+                            <>
+                              <span aria-hidden="true" className="text-[#A69A8D]"> · </span>
+                              <span>{item.notes}</span>
+                            </>
+                          )}
+                        </p>
                       )}
                     </div>
-                    {(item.notes || item.category) && (
-                      <p className="mt-0.5 sm:pl-23 text-xs text-[#6B625B]">
-                        <span>{item.category}</span>
-                        {item.notes && (
-                          <>
-                            <span aria-hidden="true"> · </span>
-                            <span>{item.notes}</span>
-                          </>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                </button>
+                  </button>
 
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(item)}
-                    aria-label={`Edit "${item.title}"`}
-                    className="p-2 rounded-lg text-[#6B625B] hover:text-[#1F1A17] hover:bg-[#F2ECE3] transition-colors"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteRoutine(item.id)}
-                    aria-label={`Delete "${item.title}"`}
-                    className="p-2 rounded-lg text-[#6B625B] hover:text-[#991B1B] hover:bg-[#F7ECEE] transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(item)}
+                      aria-label={`Edit "${item.title}"`}
+                      className="p-2 rounded-lg text-[#6E6359] hover:text-[#292522] hover:bg-[#F8F5F0] transition-colors"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteRoutine(item.id)}
+                      aria-label={`Delete "${item.title}"`}
+                      className="p-2 rounded-lg text-[#6E6359] hover:text-[#800020] hover:bg-[#FAF3F1] transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </div>
 
       {/* Edit Modal */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#1F1A17]/35 px-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#292522]/35 backdrop-blur-[2px] px-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="routine-modal-title"
         >
-          <div className="w-full max-w-md rounded-2xl bg-white border border-[#E6DDD0] p-6 shadow-lg">
+          <div className="w-full max-w-md rounded-3xl bg-[#FFFDF9] border border-[#E8E1D7] p-6 shadow-xl">
             <div className="flex items-center justify-between gap-4">
-              <h2 id="routine-modal-title" className="text-lg font-semibold text-[#1F1A17]">
+              <h2 id="routine-modal-title" className="text-xl font-medium text-[#292522]">
                 Edit Routine Block
               </h2>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
                 aria-label="Close modal"
-                className="p-1.5 rounded-lg text-[#6B625B] hover:text-[#1F1A17] hover:bg-[#F2ECE3] transition-colors"
+                className="p-1.5 rounded-lg text-[#6E6359] hover:text-[#292522] hover:bg-[#F8F5F0] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -313,7 +336,7 @@ export function DailyRoutine({
 
             <form onSubmit={handleSave} className="mt-4 space-y-4">
               <div>
-                <label htmlFor="rt-title" className="block text-xs font-medium text-[#4A433E] mb-1.5">
+                <label htmlFor="rt-title" className="block text-xs font-medium text-[#4F4740] mb-1.5">
                   Activity
                 </label>
                 <input
@@ -324,14 +347,14 @@ export function DailyRoutine({
                     setTitle(e.target.value);
                     if (formError) setFormError('');
                   }}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DDD0] bg-[#FAF7F2]/50 text-sm text-[#1F1A17] focus:outline-none focus:border-[#6D1D2C]"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E8E1D7] bg-[#F8F5F0]/70 text-sm text-[#292522] focus:outline-none focus:border-[#800020]"
                   autoFocus
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="rt-time" className="block text-xs font-medium text-[#4A433E] mb-1.5">
+                  <label htmlFor="rt-time" className="block text-xs font-medium text-[#4F4740] mb-1.5">
                     Time
                   </label>
                   <input
@@ -339,18 +362,18 @@ export function DailyRoutine({
                     type="time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DDD0] bg-[#FAF7F2]/50 text-sm font-mono text-[#1F1A17] focus:outline-none focus:border-[#6D1D2C]"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E8E1D7] bg-[#F8F5F0]/70 text-sm font-mono text-[#292522] focus:outline-none focus:border-[#800020]"
                   />
                 </div>
                 <div>
-                  <label htmlFor="rt-cat" className="block text-xs font-medium text-[#4A433E] mb-1.5">
+                  <label htmlFor="rt-cat" className="block text-xs font-medium text-[#4F4740] mb-1.5">
                     Category
                   </label>
                   <select
                     id="rt-cat"
                     value={category}
                     onChange={(e) => setCategory(e.target.value as RoutineCategory)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DDD0] bg-[#FAF7F2]/50 text-sm text-[#1F1A17] focus:outline-none focus:border-[#6D1D2C]"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E8E1D7] bg-[#F8F5F0]/70 text-sm text-[#292522] focus:outline-none focus:border-[#800020]"
                   >
                     {ROUTINE_CATEGORIES.map((c) => (
                       <option key={c} value={c}>
@@ -362,7 +385,7 @@ export function DailyRoutine({
               </div>
 
               <div>
-                <label htmlFor="rt-notes" className="block text-xs font-medium text-[#4A433E] mb-1.5">
+                <label htmlFor="rt-notes" className="block text-xs font-medium text-[#4F4740] mb-1.5">
                   Notes (optional)
                 </label>
                 <input
@@ -370,23 +393,23 @@ export function DailyRoutine({
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DDD0] bg-[#FAF7F2]/50 text-sm text-[#1F1A17] focus:outline-none focus:border-[#6D1D2C]"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E8E1D7] bg-[#F8F5F0]/70 text-sm text-[#292522] focus:outline-none focus:border-[#800020]"
                 />
               </div>
 
-              {formError && <p className="text-xs text-[#991B1B]">{formError}</p>}
+              {formError && <p className="text-xs text-[#800020]">{formError}</p>}
 
               <div className="pt-2 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-sm font-medium border border-[#E6DDD0] text-[#1F1A17] hover:bg-[#F2ECE3] transition-colors"
+                  className="px-4 py-2 rounded-xl text-sm font-medium border border-[#E8E1D7] text-[#292522] hover:bg-[#F8F5F0] transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl text-sm font-medium bg-[#6D1D2C] text-white hover:bg-[#551521] transition-colors"
+                  className="px-4 py-2 rounded-xl text-sm font-medium bg-[#800020] text-[#FFFDF9] hover:bg-[#66001A] transition-colors"
                 >
                   Save Changes
                 </button>

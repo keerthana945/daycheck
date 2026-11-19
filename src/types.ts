@@ -82,3 +82,28 @@ export interface ToastItem {
   message: string;
   tone: 'success' | 'info' | 'error';
 }
+
+export type MoodKey =
+  | 'calm'
+  | 'inspired'
+  | 'focused'
+  | 'reflective'
+  | 'tired'
+  | 'overwhelmed';
+
+export interface MoodEntry {
+  date: string; // YYYY-MM-DD
+  mood: MoodKey;
+  note?: string;
+  updatedAt: string;
+}
+
+export interface JournalEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  prompt: string;
+  title: string;
+  content: string;
+  createdAt: string;
+}
+

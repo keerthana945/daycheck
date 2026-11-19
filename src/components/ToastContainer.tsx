@@ -23,15 +23,15 @@ export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
               : CheckCircle2;
         const iconColor =
           toast.tone === 'error'
-            ? 'text-[#991B1B]'
+            ? 'text-[#800020]'
             : toast.tone === 'info'
-              ? 'text-[#6B625B]'
-              : 'text-[#2D6A4F]';
+              ? 'text-[#6E6359]'
+              : 'text-[#4A6B53]';
 
         return (
           <div
             key={toast.id}
-            className="pointer-events-auto flex items-center justify-between gap-3 rounded-xl bg-white border border-[#E5DDD2] px-4 py-3 shadow-sm text-sm text-[#1F1A17] transition-all duration-200"
+            className="pointer-events-auto flex items-center justify-between gap-3 rounded-2xl bg-[#FFFDF9] border border-[#E8E1D7] px-4 py-3 shadow-[0_6px_20px_rgba(41,37,34,0.08)] text-sm text-[#292522] transition-all duration-200"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <Icon className={`w-4 h-4 shrink-0 ${iconColor}`} />
@@ -41,7 +41,7 @@ export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
               type="button"
               onClick={() => onDismiss(toast.id)}
               aria-label="Dismiss notification"
-              className="p-1 rounded-md text-[#6B625B] hover:text-[#1F1A17] hover:bg-[#F2ECE3] transition-colors shrink-0"
+              className="p-1 rounded-md text-[#6E6359] hover:text-[#292522] hover:bg-[#F8F5F0] transition-colors shrink-0"
             >
               <X className="w-3.5 h-3.5" />
             </button>

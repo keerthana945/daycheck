@@ -28,6 +28,7 @@ export default function App() {
   const {
     state,
     toasts,
+    notify,
     dismissToast,
     addTask,
     updateTask,
@@ -74,7 +75,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#1F1A17] flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-[#F8F5F0] text-[#292522] flex flex-col lg:flex-row">
       <Sidebar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
@@ -83,18 +84,24 @@ export default function App() {
         pendingTodayCount={pendingTodayCount}
       />
 
-      <main className="flex-1 lg:pl-64 pb-24 lg:pb-12">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-9">
+      <main className="flex-1 lg:pl-64 pb-24 lg:pb-14">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-10">
           {activeTab === 'dashboard' && (
             <Dashboard
               tasks={state.tasks}
               routine={state.routine}
               habits={state.habits}
+              notes={state.notes}
               showGuide={showGuide}
               onDismissGuide={dismissGuide}
               onQuickAddTask={addTask}
               onToggleTask={toggleTask}
+              onDeleteTask={deleteTask}
               onToggleRoutine={toggleRoutineItem}
+              onAdjustHabit={adjustHabitValue}
+              onSetHabitValue={setHabitValue}
+              onAddNote={addNote}
+              onNotify={notify}
               onNavigate={setActiveTab}
             />
           )}

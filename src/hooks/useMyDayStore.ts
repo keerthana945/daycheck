@@ -358,6 +358,7 @@ export function useMyDayStore() {
   return {
     state,
     toasts,
+    notify,
     dismissToast,
     addTask,
     updateTask,

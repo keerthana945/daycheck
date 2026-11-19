@@ -9,8 +9,8 @@
 @layer base {
   html {
     font-family: var(--font-sans);
-    background-color: #FAF7F2;
-    color: #1F1A17;
+    background-color: #F8F5F0;
+    color: #292522;
   }
 
   h1, h2 {
@@ -20,6 +20,22 @@
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+.stationery-dot-grid {
+  background-image: radial-gradient(rgba(166, 154, 141, 0.22) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.stationery-ruled-paper {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 27px,
+    rgba(216, 206, 194, 0.45) 27px,
+    rgba(216, 206, 194, 0.45) 28px
+  );
+  line-height: 28px;
 }
 
 @media (prefers-reduced-motion: reduce) {
