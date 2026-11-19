@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search, Pencil, Trash2, Check, X, StickyNote } from 'lucide-react';
 import { useCompanionStore } from '../hooks/useCompanionStore';
-import { CreamEnvelopeArt, PageCoverHeader } from './EditorialCovers';
+import { PageCoverHeader } from './EditorialCovers';
 import type { Note, NoteCategory } from '../types';
 
 interface NotesRemindersProps {
@@ -216,9 +216,9 @@ export function NotesReminders({
 
       {/* Notes Grid */}
       {filteredNotes.length === 0 ? (
-        <div className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] px-6 py-10 text-center space-y-4 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none">
-          <div className="max-w-xs mx-auto">
-            <CreamEnvelopeArt />
+        <div className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] px-6 py-12 text-center space-y-3 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none">
+          <div className="w-11 h-11 rounded-2xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] mx-auto flex items-center justify-center text-[#800020] dark:text-[#D4A85E]">
+            <StickyNote className="w-5 h-5" />
           </div>
           <div>
             <h2 className="text-base font-medium text-[#292522] dark:text-[#F3EFEA]">No notes found</h2>

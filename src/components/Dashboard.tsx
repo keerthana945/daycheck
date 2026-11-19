@@ -3,7 +3,6 @@ import { motion, MotionConfig } from 'motion/react';
 import {
   Activity,
   ArrowRight,
-  BookOpen,
   CalendarDays,
   Check,
   CheckSquare,
@@ -20,11 +19,8 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import welcomeBotanicalImg from '../assets/images/journal_welcome_botanical_1795077522201.jpg';
-import affirmationCamelliaImg from '../assets/images/affirmation_botanical_emblem_1795077522205.jpg';
 import {
   MOTIVATIONAL_QUOTES,
-  WEEK_DAYS,
   formatTime12h,
   getOffsetDateISO,
   getTodayDateISO,
@@ -34,9 +30,7 @@ import {
 import { computeHabitStreak } from '../hooks/useMyDayStore';
 import { useCompanionStore, type BannerMood } from '../hooks/useCompanionStore';
 import {
-  CreamEnvelopeArt,
   FocusCategoryCover,
-  MoodboardVignetteCard,
   SkylineCoverBanner,
 } from './EditorialCovers';
 import { FocusTimerCard } from './FocusTimerCard';
@@ -199,13 +193,6 @@ const DAILY_CHALLENGES: Array<{
   },
 ];
 
-const MUSE_QUOTES: string[] = [
-  'What would the calmest, most magnetic version of you do next?',
-  'Romanticize the small, disciplined rituals.',
-  'Protect your mornings like an art studio.',
-  'Elegance is deciding what does not deserve your rush.',
-];
-
 const BANNER_MOODS: Array<{ key: BannerMood; label: string }> = [
   { key: 'skyline', label: 'Midnight City' },
   { key: 'espresso', label: 'Espresso' },
@@ -240,10 +227,8 @@ export function Dashboard({
   const {
     companion,
     setPreferredName,
-    setMantra,
     setMindDumpText,
     setBannerMood,
-    setCustomQuote,
     setMoodForToday,
     setMoodNoteForToday,
     setJournalDraft,
@@ -252,13 +237,9 @@ export function Dashboard({
     cycleChallenge,
   } = useCompanionStore();
 
-  // Editable space identity & mantra
+  // Editable space identity
   const [editingSpaceName, setEditingSpaceName] = useState(false);
   const [spaceNameDraft, setSpaceNameDraft] = useState('');
-  const [editingMantra, setEditingMantra] = useState(false);
-  const [mantraDraft, setMantraDraft] = useState('');
-  const [editingMuseQuote, setEditingMuseQuote] = useState(false);
-  const [museQuoteDraft, setMuseQuoteDraft] = useState('');
 
   // Local workspace UI states
   const [spaceGalleryTab, setSpaceGalleryTab] = useState<SpaceGalleryTab>('Active');
@@ -271,15 +252,11 @@ export function Dashboard({
   const [quickTaskCategory, setQuickTaskCategory] = useState<TaskCategory>('Study');
 
   const [affirmationIdx, setAffirmationIdx] = useState(0);
-  const [museQuoteIdx, setMuseQuoteIdx] = useState(0);
   const [promptIdx, setPromptIdx] = useState(0);
   const [entryMode, setEntryMode] = useState<EntryMode>('journal');
   const [showPastEntries, setShowPastEntries] = useState(false);
   const [quickReminderTitle, setQuickReminderTitle] = useState('');
   const [moodNoteDraft, setMoodNoteDraft] = useState<string | null>(null);
-
-  const [welcomeImgFailed, setWelcomeImgFailed] = useState(false);
-  const [emblemImgFailed, setEmblemImgFailed] = useState(false);
 
   const journalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const entriesSectionRef = useRef<HTMLElement | null>(null);
@@ -446,29 +423,12 @@ export function Dashboard({
   const todayChallenge = DAILY_CHALLENGES[daySeed % DAILY_CHALLENGES.length];
   const isChallengeDoneToday = companion.completedChallengeDates.includes(todayISO);
 
-  const displayedMuseQuote =
-    companion.customQuote || MUSE_QUOTES[museQuoteIdx % MUSE_QUOTES.length];
-
   // --- Handlers ---
   const handleSaveSpaceName = (e: React.FormEvent) => {
     e.preventDefault();
     setPreferredName(spaceNameDraft);
     setEditingSpaceName(false);
     onNotify?.('Space title updated.', 'success');
-  };
-
-  const handleSaveMantra = (e: React.FormEvent) => {
-    e.preventDefault();
-    setMantra(mantraDraft);
-    setEditingMantra(false);
-    onNotify?.('Personal mantra updated.', 'success');
-  };
-
-  const handleSaveMuseQuote = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCustomQuote(museQuoteDraft);
-    setEditingMuseQuote(false);
-    onNotify?.('Quote card updated.', 'success');
   };
 
   const handleQuickTaskSubmit = (e: React.FormEvent) => {
@@ -640,32 +600,11 @@ export function Dashboard({
             </div>
           </div>
 
-          {/* Overlapping Floating Coupe / Sparkle Space Emblem + Editable Space Title + Focus Timer */}
+          {/* Overlapping Space Emblem + Editable Space Title + Focus Timer */}
           <div className="px-5 sm:px-8 pb-6">
             <div className="relative -mt-8 mb-3 flex items-end justify-between gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#34312D] shadow-md flex items-center justify-center shrink-0">
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 32 32"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M7 8H25L16 18V26M11 26H21"
-                    className="stroke-[#800020] dark:stroke-[#D4A85E]"
-                    strokeWidth="1.75"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <circle cx="18.5" cy="11.5" r="2.5" className="fill-[#800020] dark:fill-[#E58A9B]" />
-                  <path
-                    d="M19 9L24 4"
-                    className="stroke-[#B5853B] dark:stroke-[#D4A85E]"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
-                </svg>
+              <div className="w-16 h-16 rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#34312D] shadow-md flex items-center justify-center shrink-0 text-[#800020] dark:text-[#D4A85E]">
+                <Sparkles className="w-7 h-7" aria-hidden="true" />
               </div>
 
               <p className="hidden sm:block text-xs text-[#6E6359] dark:text-[#A69E94] tabular-nums pb-1">
@@ -784,16 +723,11 @@ export function Dashboard({
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-5 items-start">
           {/* ================= LEFT RAIL (3 cols) ================= */}
           <div className="xl:col-span-3 space-y-5 order-2 xl:order-1">
-            {/* Vignette + Navigation Links */}
+            {/* Navigation Links */}
             <section
               aria-label="Workspace Navigation"
-              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 space-y-4 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none"
             >
-              <MoodboardVignetteCard
-                dateLabel={compactDateBadge}
-                spaceName={displaySpaceTitle}
-              />
-
               <div>
                 <p className="px-2 mb-2 font-display text-sm font-medium text-[#292522] dark:text-[#F3EFEA]">
                   navigation
@@ -824,59 +758,6 @@ export function Dashboard({
                   })}
                 </div>
               </div>
-            </section>
-
-            {/* Editorial "main character" Cream Stationery Tile (Editable) */}
-            <section
-              aria-label="Personal Mantra"
-              className="rounded-2xl bg-[#FAF6EE] border border-[#E5DDD0] dark:border-[#34312D] p-5 text-center shadow-[0_1px_3px_rgba(41,37,34,0.04)]"
-            >
-              {editingMantra ? (
-                <form onSubmit={handleSaveMantra} className="space-y-2">
-                  <input
-                    type="text"
-                    value={mantraDraft}
-                    onChange={(e) => setMantraDraft(e.target.value)}
-                    placeholder="e.g., main character"
-                    aria-label="Edit personal mantra"
-                    className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#D8CFC3] text-center font-display italic text-lg text-[#292522] focus:outline-none focus:border-[#800020]"
-                    autoFocus
-                  />
-                  <div className="flex items-center justify-center gap-2">
-                    <button
-                      type="submit"
-                      className="px-3 py-1 rounded-lg text-[11px] font-medium bg-[#800020] text-white"
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingMantra(false)}
-                      className="px-2 py-1 rounded-lg text-[11px] text-[#6E6359]"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMantraDraft(companion.mantra);
-                    setEditingMantra(true);
-                  }}
-                  title="Click to customize your personal mantra"
-                  className="w-full group py-2"
-                >
-                  <p className="font-display italic text-2xl sm:text-[26px] font-medium text-[#292522] tracking-tight leading-snug">
-                    {companion.mantra}
-                  </p>
-                  <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-widest text-[#8C8073] opacity-70 group-hover:opacity-100 transition-opacity">
-                    <Pencil className="w-2.5 h-2.5" />
-                    <span>tap to edit mantra</span>
-                  </span>
-                </button>
-              )}
             </section>
 
             {/* Daily Habits Checklist Widget (Notion-style embedded tracker) */}
@@ -1608,23 +1489,7 @@ export function Dashboard({
                 ))}
               </ul>
 
-              <div className="h-28 rounded-xl overflow-hidden border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#FAF3F1] dark:bg-[#261D20]">
-                {!emblemImgFailed ? (
-                  <img
-                    src={affirmationCamelliaImg}
-                    alt="Watercolor burgundy floral illustration"
-                    referrerPolicy="no-referrer"
-                    onError={() => setEmblemImgFailed(true)}
-                    className="w-full h-full object-cover dark:brightness-[0.84] dark:contrast-[1.06]"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[#800020] dark:text-[#E58A9B]">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between gap-2 pt-1">
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#EFE9E0] dark:border-[#2A2825]">
                 <p className="text-[11px] italic text-[#6E6359] dark:text-[#9E958C] truncate">
                   {quote.author}
                 </p>
@@ -1777,51 +1642,6 @@ export function Dashboard({
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (companion.journalEntries.length === 0) {
-                    setEntryMode('journal');
-                    setTimeout(() => journalTextareaRef.current?.focus(), 0);
-                    return;
-                  }
-                  setShowPastEntries((s) => !s);
-                }}
-                aria-expanded={companion.journalEntries.length > 0 ? showPastEntries : undefined}
-                aria-label={
-                  companion.journalEntries.length === 0
-                    ? 'Write and seal your first journal entry'
-                    : showPastEntries
-                      ? 'Hide saved journal entries'
-                      : `Open ${companion.journalEntries.length} saved journal entries`
-                }
-                className="group block w-full text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#800020] dark:focus-visible:ring-[#D4A85E]"
-              >
-                <CreamEnvelopeArt
-                  isOpen={showPastEntries && companion.journalEntries.length > 0}
-                  label={
-                    companion.journalEntries.length === 0
-                      ? 'Tap to write & seal an entry'
-                      : showPastEntries
-                        ? `Close sealed entries (${companion.journalEntries.length})`
-                        : `Open ${companion.journalEntries.length} sealed ${
-                            companion.journalEntries.length === 1 ? 'entry' : 'entries'
-                          }`
-                  }
-                />
-              </button>
-
-              {!welcomeImgFailed && (
-                <div className="h-20 rounded-xl overflow-hidden border border-[#E6DFD5] dark:border-[#2E2C29]">
-                  <img
-                    src={welcomeBotanicalImg}
-                    alt="Pressed botanical sprig on linen stationery"
-                    referrerPolicy="no-referrer"
-                    onError={() => setWelcomeImgFailed(true)}
-                    className="w-full h-full object-cover dark:brightness-[0.85]"
-                  />
-                </div>
-              )}
             </section>
 
             {/* Reminders Checklist (Wired directly to real Reminder notes) */}
@@ -1908,105 +1728,41 @@ export function Dashboard({
               </form>
             </section>
 
-            {/* Daily Gentle Challenge + Chic Editorial Quote Card */}
+            {/* Daily Gentle Challenge */}
             <section
-              aria-label="Daily Challenge and Muse Quote"
-              className="space-y-4"
+              aria-label="Daily Challenge"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 space-y-2.5"
             >
-              <div className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-medium text-[#800020] dark:text-[#D4A85E]">
-                    daily challenge · {todayChallenge.duration}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={cycleChallenge}
-                    aria-label="Swap daily challenge"
-                    className="p-1 rounded-md text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA]"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                  </button>
-                </div>
-                <p className="text-xs font-semibold text-[#292522] dark:text-[#F3EFEA]">
-                  {todayChallenge.title}
-                </p>
-                <p className="text-[11px] text-[#6E6359] dark:text-[#A69E94] leading-relaxed">
-                  {todayChallenge.description}
-                </p>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-medium text-[#800020] dark:text-[#D4A85E]">
+                  daily challenge · {todayChallenge.duration}
+                </span>
                 <button
                   type="button"
-                  onClick={handleToggleChallenge}
-                  className={`w-full py-2 rounded-xl text-xs font-medium transition-colors ${
-                    isChallengeDoneToday
-                      ? 'bg-[#4A6B53] dark:bg-[#4E7559] text-[#FFFDF9]'
-                      : 'bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-[#292522] dark:text-[#F3EFEA] hover:border-[#800020] dark:hover:border-[#D4A85E]'
-                  }`}
+                  onClick={cycleChallenge}
+                  aria-label="Swap daily challenge"
+                  className="p-1 rounded-md text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA]"
                 >
-                  {isChallengeDoneToday ? 'Challenge Completed' : 'Accept & Complete'}
+                  <RefreshCw className="w-3 h-3" />
                 </button>
               </div>
-
-              {/* Iconic High-Contrast Editorial Quote Callout Card */}
-              <div className="rounded-2xl bg-[#FAF6EE] border border-[#E5DDD0] dark:border-[#34312D] p-5 text-center space-y-2">
-                {editingMuseQuote ? (
-                  <form onSubmit={handleSaveMuseQuote} className="space-y-2">
-                    <textarea
-                      rows={2}
-                      value={museQuoteDraft}
-                      onChange={(e) => setMuseQuoteDraft(e.target.value)}
-                      placeholder="Write a personal quote or question..."
-                      aria-label="Edit muse quote"
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#D8CFC3] text-xs text-[#292522] text-center focus:outline-none focus:border-[#800020]"
-                      autoFocus
-                    />
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        type="submit"
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#800020] text-white"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingMuseQuote(false)}
-                        className="px-2 py-1 rounded-lg text-[11px] text-[#6E6359]"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <>
-                    <BookOpen className="w-4 h-4 mx-auto text-[#800020]" aria-hidden="true" />
-                    <p className="font-display text-base font-semibold uppercase tracking-[0.04em] leading-snug text-[#1D1B19]">
-                      {displayedMuseQuote}
-                    </p>
-                    <div className="flex items-center justify-center gap-3 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCustomQuote('');
-                          setMuseQuoteIdx((i) => i + 1);
-                        }}
-                        className="text-[10px] font-mono uppercase tracking-wider text-[#6E6359] hover:text-[#1D1B19]"
-                      >
-                        next quote
-                      </button>
-                      <span className="text-[#CBBFB2]" aria-hidden="true">·</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMuseQuoteDraft(displayedMuseQuote);
-                          setEditingMuseQuote(true);
-                        }}
-                        className="text-[10px] font-mono uppercase tracking-wider text-[#800020] hover:underline"
-                      >
-                        customize
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              <p className="text-xs font-semibold text-[#292522] dark:text-[#F3EFEA]">
+                {todayChallenge.title}
+              </p>
+              <p className="text-[11px] text-[#6E6359] dark:text-[#A69E94] leading-relaxed">
+                {todayChallenge.description}
+              </p>
+              <button
+                type="button"
+                onClick={handleToggleChallenge}
+                className={`w-full py-2 rounded-xl text-xs font-medium transition-colors ${
+                  isChallengeDoneToday
+                    ? 'bg-[#4A6B53] dark:bg-[#4E7559] text-[#FFFDF9]'
+                    : 'bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-[#292522] dark:text-[#F3EFEA] hover:border-[#800020] dark:hover:border-[#D4A85E]'
+                }`}
+              >
+                {isChallengeDoneToday ? 'Challenge Completed' : 'Accept & Complete'}
+              </button>
             </section>
           </div>
         </div>
