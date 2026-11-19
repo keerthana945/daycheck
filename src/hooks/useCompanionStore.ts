@@ -1,11 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { getTodayDateISO } from '../data/sampleData';
 import type { JournalEntry, MoodEntry, MoodKey } from '../types';
 
 const COMPANION_STORAGE_KEY = 'myday_companion_v1';
 
+export type BannerMood = 'skyline' | 'espresso' | 'burgundy';
+
 interface CompanionState {
   preferredName: string;
+  mantra: string;
+  mindDumpText: string;
+  bannerMood: BannerMood;
+  customQuote: string;
   moods: Record<string, MoodEntry>;
   journalEntries: JournalEntry[];
   journalDraftTitle: string;
@@ -16,6 +22,10 @@ interface CompanionState {
 
 const DEFAULT_COMPANION_STATE: CompanionState = {
   preferredName: '',
+  mantra: 'main character',
+  mindDumpText: '',
+  bannerMood: 'skyline',
+  customQuote: '',
   moods: {},
   journalEntries: [
     {
@@ -39,9 +49,25 @@ function loadCompanionState(): CompanionState {
     const raw = localStorage.getItem(COMPANION_STORAGE_KEY);
     if (!raw) return DEFAULT_COMPANION_STATE;
     const parsed = JSON.parse(raw) as Partial<CompanionState>;
+    const validMood =
+      parsed.bannerMood === 'skyline' ||
+      parsed.bannerMood === 'espresso' ||
+      parsed.bannerMood === 'burgundy'
+        ? parsed.bannerMood
+        : 'skyline';
+
     return {
       preferredName:
         typeof parsed.preferredName === 'string' ? parsed.preferredName : '',
+      mantra:
+        typeof parsed.mantra === 'string' && parsed.mantra.trim()
+          ? parsed.mantra
+          : 'main character',
+      mindDumpText:
+        typeof parsed.mindDumpText === 'string' ? parsed.mindDumpText : '',
+      bannerMood: validMood,
+      customQuote:
+        typeof parsed.customQuote === 'string' ? parsed.customQuote : '',
       moods:
         parsed.moods && typeof parsed.moods === 'object' ? parsed.moods : {},
       journalEntries: Array.isArray(parsed.journalEntries)
@@ -62,7 +88,7 @@ function loadCompanionState(): CompanionState {
   }
 }
 
-export function useCompanionStore() {
+function useCompanionStoreValue() {
   const [companion, setCompanion] = useState<CompanionState>(loadCompanionState);
 
   useEffect(() => {
@@ -77,6 +103,34 @@ export function useCompanionStore() {
     setCompanion((prev) => ({
       ...prev,
       preferredName: name.trim(),
+    }));
+  }, []);
+
+  const setMantra = useCallback((mantra: string) => {
+    setCompanion((prev) => ({
+      ...prev,
+      mantra: mantra.trim() || 'main character',
+    }));
+  }, []);
+
+  const setMindDumpText = useCallback((text: string) => {
+    setCompanion((prev) => ({
+      ...prev,
+      mindDumpText: text,
+    }));
+  }, []);
+
+  const setBannerMood = useCallback((bannerMood: BannerMood) => {
+    setCompanion((prev) => ({
+      ...prev,
+      bannerMood,
+    }));
+  }, []);
+
+  const setCustomQuote = useCallback((customQuote: string) => {
+    setCompanion((prev) => ({
+      ...prev,
+      customQuote: customQuote.trim(),
     }));
   }, []);
 
@@ -172,6 +226,10 @@ export function useCompanionStore() {
   return {
     companion,
     setPreferredName,
+    setMantra,
+    setMindDumpText,
+    setBannerMood,
+    setCustomQuote,
     setMoodForToday,
     setMoodNoteForToday,
     setJournalDraft,
@@ -179,4 +237,21 @@ export function useCompanionStore() {
     toggleTodayChallenge,
     cycleChallenge,
   };
+}
+
+type CompanionContextValue = ReturnType<typeof useCompanionStoreValue>;
+
+const CompanionContext = createContext<CompanionContextValue | null>(null);
+
+export function CompanionProvider({ children }: { children: ReactNode }) {
+  const value = useCompanionStoreValue();
+  return createElement(CompanionContext.Provider, { value }, children);
+}
+
+export function useCompanionStore(): CompanionContextValue {
+  const ctx = useContext(CompanionContext);
+  if (!ctx) {
+    throw new Error('useCompanionStore must be used inside CompanionProvider');
+  }
+  return ctx;
 }

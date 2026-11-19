@@ -9,12 +9,15 @@ import { ToastContainer } from './components/ToastContainer';
 import { TodoList } from './components/TodoList';
 import { WeeklyPlanner } from './components/WeeklyPlanner';
 import { getTodayWeekday } from './data/sampleData';
+import { CompanionProvider } from './hooks/useCompanionStore';
 import { useMyDayStore } from './hooks/useMyDayStore';
+import { useTheme } from './hooks/useTheme';
 import type { AppTab } from './types';
 
 const GUIDE_STORAGE_KEY = 'myday_guide_dismissed';
 
 export default function App() {
+  const { preference, resolvedTheme, setPreference, cyclePreference } = useTheme();
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [showGuide, setShowGuide] = useState<boolean>(() => {
@@ -75,17 +78,26 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F5F0] text-[#292522] flex flex-col lg:flex-row">
+    <CompanionProvider>
+      <div className="min-h-screen bg-[#F8F5F0] dark:bg-[#141414] text-[#292522] dark:text-[#F3EFEA] flex flex-col lg:flex-row transition-colors duration-200">
       <Sidebar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         onRequestReset={() => setResetModalOpen(true)}
         onOpenGuide={openGuide}
         pendingTodayCount={pendingTodayCount}
+        themePreference={preference}
+        resolvedTheme={resolvedTheme}
+        onSetThemePreference={setPreference}
+        onCycleTheme={cyclePreference}
       />
 
-      <main className="flex-1 lg:pl-64 pb-24 lg:pb-14">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-10">
+      <main className="flex-1 lg:pl-64 pb-24 lg:pb-14 min-w-0">
+        <div
+          className={`mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 ${
+            activeTab === 'dashboard' ? 'max-w-[1440px]' : 'max-w-6xl'
+          }`}
+        >
           {activeTab === 'dashboard' && (
             <Dashboard
               tasks={state.tasks}
@@ -101,6 +113,7 @@ export default function App() {
               onAdjustHabit={adjustHabitValue}
               onSetHabitValue={setHabitValue}
               onAddNote={addNote}
+              onToggleNoteCompleted={toggleNoteCompleted}
               onNotify={notify}
               onNavigate={setActiveTab}
             />
@@ -173,6 +186,7 @@ export default function App() {
           setResetModalOpen(false);
         }}
       />
-    </div>
+      </div>
+    </CompanionProvider>
   );
 }

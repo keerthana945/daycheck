@@ -1,17 +1,22 @@
 import { useMemo, useRef, useState } from 'react';
 import { motion, MotionConfig } from 'motion/react';
 import {
+  Activity,
   ArrowRight,
   BookOpen,
-  Calendar,
+  CalendarDays,
   Check,
-  Compass,
+  CheckSquare,
+  Clock,
   Feather,
+  ListTodo,
   Minus,
+  Pencil,
   Plus,
   RefreshCw,
   Sparkles,
   Sprout,
+  StickyNote,
   Trash2,
   X,
 } from 'lucide-react';
@@ -27,7 +32,14 @@ import {
   getTodayWeekdayIndex,
 } from '../data/sampleData';
 import { computeHabitStreak } from '../hooks/useMyDayStore';
-import { useCompanionStore } from '../hooks/useCompanionStore';
+import { useCompanionStore, type BannerMood } from '../hooks/useCompanionStore';
+import {
+  CreamEnvelopeArt,
+  FocusCategoryCover,
+  MoodboardVignetteCard,
+  SkylineCoverBanner,
+} from './EditorialCovers';
+import { FocusTimerCard } from './FocusTimerCard';
 import {
   HabitGardenPlant,
   getGrowthStageLabel,
@@ -60,18 +72,21 @@ interface DashboardProps {
   onAdjustHabit: (key: HabitKey, delta: number) => void;
   onSetHabitValue: (key: HabitKey, value: number) => void;
   onAddNote: (input: Omit<Note, 'id' | 'updatedAt'>) => void;
+  onToggleNoteCompleted?: (id: string) => void;
   onNotify?: (message: string, tone?: ToastItem['tone']) => void;
   onNavigate: (tab: AppTab) => void;
 }
 
 type DashboardTaskFilter = 'All' | 'Pending' | 'Completed';
+type SpaceGalleryTab = 'Active' | 'Completed' | 'All';
+type EntryMode = 'journal' | 'minddump';
 
 const PRIORITIES: Priority[] = ['High', 'Medium', 'Low'];
-const CATEGORIES: TaskCategory[] = [
-  'Personal',
+const FOCUS_CATEGORIES: TaskCategory[] = [
   'Study',
   'UX Design',
   'Career',
+  'Personal',
   'Home',
   'Health',
 ];
@@ -121,6 +136,24 @@ const MOOD_OPTIONS: Array<{
   },
 ];
 
+const PERSONAL_AFFIRMATIONS: string[][] = [
+  [
+    'I achieve whatever I set my mind to.',
+    'I move with calm clarity and unhurried focus.',
+    'I am worthy of building a life I genuinely love.',
+  ],
+  [
+    'My small daily discipline quietly compounds into freedom.',
+    'I create thoughtful work without burning out.',
+    'Everything meant for me meets my steady effort.',
+  ],
+  [
+    'I choose intentional routines over chaotic urgency.',
+    'My craft, voice, and energy grow stronger every week.',
+    'I am allowed to rest and still be ambitious.',
+  ],
+];
+
 const JOURNAL_PROMPTS: string[] = [
   'What deserves your gentle, unhurried focus today?',
   'What is one small win from the last 24 hours worth celebrating?',
@@ -138,13 +171,13 @@ const DAILY_CHALLENGES: Array<{
     title: 'Screen-Free First 20 Minutes',
     duration: '20 min · Mindful Morning',
     description:
-      'Step away from feeds and notifications while waking up, hydrating, or having breakfast.',
+      'Step away from feeds while hydrating, stretching, or setting today’s tone.',
   },
   {
     title: 'Three Quiet Wins Before Dinner',
     duration: '5 min · Evening Clarity',
     description:
-      'Write down three things you moved forward today—even small steps count equally.',
+      'Write down three things you moved forward today—every steady step counts.',
   },
   {
     title: '15-Minute Desk & Space Reset',
@@ -156,14 +189,27 @@ const DAILY_CHALLENGES: Array<{
     title: 'Single-Tab Deep Focus Session',
     duration: '25 min · Craft & Study',
     description:
-      'Pick your most important task and work with only one window open until the block finishes.',
+      'Pick your most important task and work with only one window open until the timer rings.',
   },
   {
-    title: 'Kind Note to Future Tomorrow-You',
+    title: 'Kind Note to Tomorrow-You',
     duration: '3 min · Self-Compassion',
     description:
-      'Leave a short encouraging note or pick tomorrow’s single top priority before winding down.',
+      'Leave a short encouraging note or pick tomorrow’s single top priority before rest.',
   },
+];
+
+const MUSE_QUOTES: string[] = [
+  'What would the calmest, most magnetic version of you do next?',
+  'Romanticize the small, disciplined rituals.',
+  'Protect your mornings like an art studio.',
+  'Elegance is deciding what does not deserve your rush.',
+];
+
+const BANNER_MOODS: Array<{ key: BannerMood; label: string }> = [
+  { key: 'skyline', label: 'Midnight City' },
+  { key: 'espresso', label: 'Espresso' },
+  { key: 'burgundy', label: 'Burgundy' },
 ];
 
 function getTimeGreeting(): string {
@@ -171,19 +217,6 @@ function getTimeGreeting(): string {
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
-}
-
-function getMomentumPhrase(pct: number): string {
-  if (pct >= 90) return 'Beautifully complete';
-  if (pct >= 65) return 'Strong steady flow';
-  if (pct >= 35) return 'Warm momentum';
-  if (pct > 0) return 'Gentle start';
-  return 'Fresh page ready';
-}
-
-function getPriorityTextClass(priority: Priority): string {
-  if (priority === 'High') return 'text-[#800020] font-medium';
-  return 'text-[#6E6359]';
 }
 
 export function Dashboard({
@@ -200,11 +233,17 @@ export function Dashboard({
   onAdjustHabit,
   onSetHabitValue,
   onAddNote,
+  onToggleNoteCompleted,
   onNotify,
   onNavigate,
 }: DashboardProps) {
   const {
     companion,
+    setPreferredName,
+    setMantra,
+    setMindDumpText,
+    setBannerMood,
+    setCustomQuote,
     setMoodForToday,
     setMoodNoteForToday,
     setJournalDraft,
@@ -213,19 +252,37 @@ export function Dashboard({
     cycleChallenge,
   } = useCompanionStore();
 
-  const [quoteIdx, setQuoteIdx] = useState(0);
-  const [promptIdx, setPromptIdx] = useState(0);
+  // Editable space identity & mantra
+  const [editingSpaceName, setEditingSpaceName] = useState(false);
+  const [spaceNameDraft, setSpaceNameDraft] = useState('');
+  const [editingMantra, setEditingMantra] = useState(false);
+  const [mantraDraft, setMantraDraft] = useState('');
+  const [editingMuseQuote, setEditingMuseQuote] = useState(false);
+  const [museQuoteDraft, setMuseQuoteDraft] = useState('');
+
+  // Local workspace UI states
+  const [spaceGalleryTab, setSpaceGalleryTab] = useState<SpaceGalleryTab>('Active');
+  const [selectedCategory, setSelectedCategory] = useState<TaskCategory | null>(null);
   const [taskFilter, setTaskFilter] = useState<DashboardTaskFilter>('All');
+  const [composerOpen, setComposerOpen] = useState(false);
   const [quickTaskTitle, setQuickTaskTitle] = useState('');
   const [quickTaskTime, setQuickTaskTime] = useState('10:00');
   const [quickTaskPriority, setQuickTaskPriority] = useState<Priority>('Medium');
-  const [quickTaskCategory, setQuickTaskCategory] = useState<TaskCategory>('Personal');
+  const [quickTaskCategory, setQuickTaskCategory] = useState<TaskCategory>('Study');
+
+  const [affirmationIdx, setAffirmationIdx] = useState(0);
+  const [museQuoteIdx, setMuseQuoteIdx] = useState(0);
+  const [promptIdx, setPromptIdx] = useState(0);
+  const [entryMode, setEntryMode] = useState<EntryMode>('journal');
+  const [showPastEntries, setShowPastEntries] = useState(false);
+  const [quickReminderTitle, setQuickReminderTitle] = useState('');
   const [moodNoteDraft, setMoodNoteDraft] = useState<string | null>(null);
+
   const [welcomeImgFailed, setWelcomeImgFailed] = useState(false);
   const [emblemImgFailed, setEmblemImgFailed] = useState(false);
 
   const journalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const journalSectionRef = useRef<HTMLElement | null>(null);
+  const entriesSectionRef = useRef<HTMLElement | null>(null);
   const gardenSectionRef = useRef<HTMLElement | null>(null);
   const tasksSectionRef = useRef<HTMLElement | null>(null);
 
@@ -233,14 +290,22 @@ export function Dashboard({
   const todayDay = getTodayWeekday();
   const todayIdx = getTodayWeekdayIndex();
 
-  const formattedDate = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
+  const shortDateLabel = new Date().toLocaleDateString('en-US', {
     day: 'numeric',
+    month: 'long',
     year: 'numeric',
   });
 
-  // --- Tasks metrics ---
+  const compactDateBadge = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+
+  const displaySpaceTitle = companion.preferredName
+    ? `${companion.preferredName}'s space`
+    : 'my day space';
+
+  // --- Tasks & Focus Spaces Metrics ---
   const todayTasks = useMemo(
     () =>
       tasks
@@ -252,45 +317,84 @@ export function Dashboard({
     [tasks, todayDay],
   );
 
-  const filteredTodayTasks = useMemo(() => {
-    if (taskFilter === 'Pending') return todayTasks.filter((t) => !t.completed);
-    if (taskFilter === 'Completed') return todayTasks.filter((t) => t.completed);
-    return todayTasks;
-  }, [todayTasks, taskFilter]);
+  const completedTodayTasks = todayTasks.filter((t) => t.completed).length;
+  const pendingTodayTasks = todayTasks.length - completedTodayTasks;
 
-  const completedTasks = todayTasks.filter((t) => t.completed).length;
-  const pendingTasks = todayTasks.length - completedTasks;
-  const highPriorityPending = todayTasks.filter(
-    (t) => !t.completed && t.priority === 'High',
-  ).length;
-  const tasksPct =
-    todayTasks.length === 0 ? 0 : Math.round((completedTasks / todayTasks.length) * 100);
+  const focusSpaceStats = useMemo(() => {
+    return FOCUS_CATEGORIES.map((category) => {
+      const catTasks = tasks.filter((t) => t.category === category);
+      const done = catTasks.filter((t) => t.completed).length;
+      const pending = catTasks.length - done;
+      const pct = catTasks.length === 0 ? 0 : Math.round((done / catTasks.length) * 100);
+      return {
+        category,
+        total: catTasks.length,
+        done,
+        pending,
+        pct,
+      };
+    });
+  }, [tasks]);
 
-  // --- Routine metrics ---
+  const visibleFocusSpaces = useMemo(() => {
+    if (spaceGalleryTab === 'Active') {
+      return focusSpaceStats.filter((s) => s.pending > 0 || s.total === 0);
+    }
+    if (spaceGalleryTab === 'Completed') {
+      return focusSpaceStats.filter((s) => s.total > 0 && s.pending === 0);
+    }
+    return focusSpaceStats;
+  }, [focusSpaceStats, spaceGalleryTab]);
+
+  // Board Tasks (supports filtering by selected Focus Space + status tab)
+  const boardSourceTasks = useMemo(() => {
+    const base = selectedCategory
+      ? tasks.filter((t) => t.category === selectedCategory)
+      : todayTasks;
+
+    return [...base]
+      .filter((t) => {
+        if (taskFilter === 'Pending') return !t.completed;
+        if (taskFilter === 'Completed') return t.completed;
+        return true;
+      })
+      .sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        return (a.time || '99:99').localeCompare(b.time || '99:99');
+      });
+  }, [tasks, todayTasks, selectedCategory, taskFilter]);
+
+  const todoColTasks = useMemo(
+    () => boardSourceTasks.filter((t) => !t.completed && t.priority !== 'High'),
+    [boardSourceTasks],
+  );
+  const highPriorityColTasks = useMemo(
+    () => boardSourceTasks.filter((t) => !t.completed && t.priority === 'High'),
+    [boardSourceTasks],
+  );
+  const doneColTasks = useMemo(
+    () => boardSourceTasks.filter((t) => t.completed),
+    [boardSourceTasks],
+  );
+
+  // --- Routine ---
   const sortedRoutine = useMemo(
     () => [...routine].sort((a, b) => a.time.localeCompare(b.time)),
     [routine],
   );
   const completedRoutine = routine.filter((r) => r.completed).length;
-  const remainingRoutine = routine.length - completedRoutine;
-  const routinePct =
-    routine.length === 0 ? 0 : Math.round((completedRoutine / routine.length) * 100);
   const nextRoutineItem = sortedRoutine.find((r) => !r.completed) || null;
   const upcomingRoutine = useMemo(() => {
     const pending = sortedRoutine.filter((r) => !r.completed);
     return (pending.length > 0 ? pending : sortedRoutine).slice(0, 6);
   }, [sortedRoutine]);
 
-  // --- Habit Garden metrics ---
+  // --- Habits ---
   const habitsMetToday = habits.filter((h) => h.todayValue >= h.targetValue).length;
-  const habitsPct =
-    habits.length === 0 ? 0 : Math.round((habitsMetToday / habits.length) * 100);
-
   const bestStreak = useMemo(
     () => habits.reduce((max, h) => Math.max(max, computeHabitStreak(h.weeklyHistory)), 0),
     [habits],
   );
-
   const activeDaysInWeek = todayIdx + 1;
   const totalPossibleHabitCheckIns = habits.length * activeDaysInWeek;
   const completedHabitCheckIns = habits.reduce(
@@ -302,36 +406,22 @@ export function Dashboard({
       ? 0
       : Math.round((completedHabitCheckIns / totalPossibleHabitCheckIns) * 100);
 
-  const habitByDayRates = useMemo(
-    () =>
-      WEEK_DAYS.map((day, idx) => {
-        const metCount = habits.filter((h) => h.weeklyHistory[idx]).length;
-        const pct = habits.length === 0 ? 0 : Math.round((metCount / habits.length) * 100);
-        return { day, idx, metCount, pct };
-      }),
-    [habits],
-  );
-
-  // --- Overall Daily Progress (Tasks + Routine + Habits) ---
+  // --- Overall Daily Progress ---
   const totalDailyPillars = todayTasks.length + routine.length + habits.length;
-  const completedDailyPillars = completedTasks + completedRoutine + habitsMetToday;
+  const completedDailyPillars = completedTodayTasks + completedRoutine + habitsMetToday;
   const overallProgressPct =
     totalDailyPillars === 0
       ? 0
       : Math.round((completedDailyPillars / totalDailyPillars) * 100);
 
-  const ringRadius = 40;
-  const ringCircumference = 2 * Math.PI * ringRadius;
-  const ringOffset =
-    ringCircumference - (overallProgressPct / 100) * ringCircumference;
+  // --- Reminders synced with Notes ---
+  const reminderNotes = useMemo(
+    () =>
+      notes.filter((n) => n.category === 'Reminder' || Boolean(n.reminderDate)),
+    [notes],
+  );
 
-  // --- Weekly Tasks ---
-  const weeklyCompleted = tasks.filter((t) => t.completed).length;
-  const weeklyTotal = tasks.length;
-  const weeklyPct =
-    weeklyTotal === 0 ? 0 : Math.round((weeklyCompleted / weeklyTotal) * 100);
-
-  // --- Mood & Companion ---
+  // --- Mood, Affirmations, Prompt, Challenge ---
   const todayMoodEntry = companion.moods[todayISO];
   const selectedMoodObj =
     MOOD_OPTIONS.find((m) => m.key === todayMoodEntry?.mood) ?? null;
@@ -348,17 +438,39 @@ export function Dashboard({
     });
   }, [companion.moods]);
 
-  const quote = MOTIVATIONAL_QUOTES[quoteIdx % MOTIVATIONAL_QUOTES.length];
+  const affirmationSet =
+    PERSONAL_AFFIRMATIONS[affirmationIdx % PERSONAL_AFFIRMATIONS.length];
+  const quote = MOTIVATIONAL_QUOTES[affirmationIdx % MOTIVATIONAL_QUOTES.length];
   const currentPrompt = JOURNAL_PROMPTS[promptIdx % JOURNAL_PROMPTS.length];
-
-  // Daily Challenge
   const daySeed = new Date().getDate() + companion.challengeOffset;
   const todayChallenge = DAILY_CHALLENGES[daySeed % DAILY_CHALLENGES.length];
   const isChallengeDoneToday = companion.completedChallengeDates.includes(todayISO);
 
-  const journalCheckInsCount = companion.journalEntries.length + Object.keys(companion.moods).length;
+  const displayedMuseQuote =
+    companion.customQuote || MUSE_QUOTES[museQuoteIdx % MUSE_QUOTES.length];
 
   // --- Handlers ---
+  const handleSaveSpaceName = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPreferredName(spaceNameDraft);
+    setEditingSpaceName(false);
+    onNotify?.('Space title updated.', 'success');
+  };
+
+  const handleSaveMantra = (e: React.FormEvent) => {
+    e.preventDefault();
+    setMantra(mantraDraft);
+    setEditingMantra(false);
+    onNotify?.('Personal mantra updated.', 'success');
+  };
+
+  const handleSaveMuseQuote = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCustomQuote(museQuoteDraft);
+    setEditingMuseQuote(false);
+    onNotify?.('Quote card updated.', 'success');
+  };
+
   const handleQuickTaskSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!quickTaskTitle.trim()) return;
@@ -367,10 +479,18 @@ export function Dashboard({
       time: quickTaskTime || '10:00',
       deadline: todayISO,
       priority: quickTaskPriority,
-      category: quickTaskCategory,
+      category: selectedCategory || quickTaskCategory,
       day: todayDay,
     });
     setQuickTaskTitle('');
+    setComposerOpen(false);
+  };
+
+  const openComposerForColumn = (priority: Priority) => {
+    setQuickTaskPriority(priority);
+    if (selectedCategory) setQuickTaskCategory(selectedCategory);
+    setComposerOpen(true);
+    tasksSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
   const handleToggleTaskWithFeedback = (task: Task) => {
@@ -403,12 +523,13 @@ export function Dashboard({
   };
 
   const handleReflectOnAffirmation = () => {
-    const starterTitle = `Reflection: ${quote.author}`;
+    setEntryMode('journal');
+    const starterTitle = `Affirmation Reflection`;
     const starterBody = companion.journalDraftContent.trim()
-      ? `${companion.journalDraftContent}\n\n"${quote.text}" — `
-      : `"${quote.text}"\n\nWhat this brings up for me today: `;
+      ? `${companion.journalDraftContent}\n\n"${affirmationSet[0]}" — `
+      : `"${affirmationSet[0]}"\n\nWhat this feels like today: `;
     setJournalDraft(companion.journalDraftTitle || starterTitle, starterBody);
-    journalSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    entriesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     window.setTimeout(() => journalTextareaRef.current?.focus(), 350);
   };
 
@@ -426,6 +547,32 @@ export function Dashboard({
       category: 'Personal',
       completed: false,
     });
+  };
+
+  const handleArchiveMindDump = () => {
+    const text = companion.mindDumpText.trim();
+    if (!text) return;
+    onAddNote({
+      title: `Mind Dump · ${compactDateBadge}`,
+      content: text,
+      category: 'Personal',
+      completed: false,
+    });
+    setMindDumpText('');
+  };
+
+  const handleAddQuickReminder = (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = quickReminderTitle.trim();
+    if (!text) return;
+    onAddNote({
+      title: text,
+      content: text,
+      category: 'Reminder',
+      reminderDate: todayISO,
+      completed: false,
+    });
+    setQuickReminderTitle('');
   };
 
   const handleToggleChallenge = () => {
@@ -456,93 +603,148 @@ export function Dashboard({
     }
   };
 
-  const visibleTodayTasks = filteredTodayTasks.slice(0, 6);
-
   return (
     <MotionConfig reducedMotion="user">
-      <div className="space-y-8">
-        {/* 1. Editorial Magazine Welcome Spread */}
+      <div className="space-y-6">
+        {/* 1. Atmospheric Skyline Cover Banner + Space Header */}
         <motion.section
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: EASE_OUT }}
-          aria-label="Welcome"
-          className="rounded-3xl bg-[#FFFDF9] border border-[#E8E1D7] overflow-hidden shadow-[0_2px_12px_rgba(41,37,34,0.04)]"
+          transition={{ duration: 0.32, ease: EASE_OUT }}
+          aria-label="Personal Space Header"
+          className="rounded-3xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] overflow-hidden shadow-[0_2px_14px_rgba(41,37,34,0.05)] dark:shadow-none transition-colors"
         >
-          <div className="grid grid-cols-1 lg:grid-cols-12 items-stretch">
-            <div className="lg:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-between gap-6">
-              <div>
-                <p className="inline-flex items-center gap-2 text-xs font-medium tracking-wide text-[#800020]">
-                  <Calendar className="w-3.5 h-3.5 shrink-0" />
-                  <span>{formattedDate}</span>
-                  <span aria-hidden="true" className="text-[#CBBFB2]">·</span>
-                  <span className="text-[#6E6359]">Daily Journal &amp; Planner</span>
-                </p>
+          {/* Top Atmospheric Banner */}
+          <div className="relative">
+            <SkylineCoverBanner mood={companion.bannerMood} />
 
-                <h1 className="mt-3 text-3xl sm:text-[40px] font-medium tracking-[-0.02em] leading-[1.12] text-[#292522] text-balance">
-                  {getTimeGreeting()}, welcome back to your quiet space.
-                </h1>
+            {/* Subtle Banner Atmosphere Switcher */}
+            <div className="absolute top-3 right-3 flex items-center gap-1 rounded-xl bg-black/45 backdrop-blur-md border border-white/10 p-1">
+              {BANNER_MOODS.map((m) => {
+                const active = companion.bannerMood === m.key;
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => setBannerMood(m.key)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors whitespace-nowrap ${
+                      active
+                        ? 'bg-[#C89B54] text-[#141414]'
+                        : 'text-[#EAE3D9]/80 hover:text-white'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-                <p className="mt-3.5 text-sm sm:text-[15px] text-[#5C534D] leading-relaxed max-w-xl">
-                  {pendingTasks > 0
-                    ? `You have ${pendingTasks} pending ${pendingTasks === 1 ? 'task' : 'tasks'} for ${todayDay}`
-                    : `All ${todayDay} tasks are checked off`}
-                  {nextRoutineItem
-                    ? `, with ${nextRoutineItem.title.toLowerCase()} coming up at ${formatTime12h(nextRoutineItem.time)}.`
-                    : ', and today’s routine timetable is complete.'}{' '}
-                  {habitsMetToday > 0
-                    ? `${habitsMetToday} of ${habits.length} plants are blooming in your habit garden.`
-                    : 'Your habit garden is waiting for its first gentle step.'}
-                </p>
+          {/* Overlapping Floating Coupe / Sparkle Space Emblem + Editable Space Title + Focus Timer */}
+          <div className="px-5 sm:px-8 pb-6">
+            <div className="relative -mt-8 mb-3 flex items-end justify-between gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#34312D] shadow-md flex items-center justify-center shrink-0">
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 32 32"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M7 8H25L16 18V26M11 26H21"
+                    className="stroke-[#800020] dark:stroke-[#D4A85E]"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <circle cx="18.5" cy="11.5" r="2.5" className="fill-[#800020] dark:fill-[#E58A9B]" />
+                  <path
+                    d="M19 9L24 4"
+                    className="stroke-[#B5853B] dark:stroke-[#D4A85E]"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => onNavigate('todos')}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-[#800020] text-[#FFFDF9] hover:bg-[#66001A] transition-colors shadow-[0_1px_3px_rgba(128,0,32,0.22)] whitespace-nowrap shrink-0"
-                >
-                  <span>Plan Today&apos;s Tasks</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigate('routine')}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-[#E8E1D7] bg-[#F8F5F0] text-[#292522] hover:border-[#A69A8D] transition-colors whitespace-nowrap shrink-0"
-                >
-                  <span>Open Routine</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    journalSectionRef.current?.scrollIntoView({
-                      behavior: 'smooth',
-                      block: 'center',
-                    })
-                  }
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-[#6E6359] hover:text-[#800020] transition-colors whitespace-nowrap shrink-0"
-                >
-                  <Feather className="w-3.5 h-3.5" />
-                  <span>Write in Journal</span>
-                </button>
-              </div>
+              <p className="hidden sm:block text-xs text-[#6E6359] dark:text-[#A69E94] tabular-nums pb-1">
+                <span>{getTimeGreeting()}</span>
+                <span aria-hidden="true" className="text-[#A69A8D] dark:text-[#5C5650]"> · </span>
+                <span>{shortDateLabel}</span>
+                <span aria-hidden="true" className="text-[#A69A8D] dark:text-[#5C5650]"> · </span>
+                <span className="font-mono font-medium text-[#800020] dark:text-[#D4A85E]">
+                  {overallProgressPct}% today
+                </span>
+              </p>
             </div>
 
-            <div className="lg:col-span-5 relative min-h-[220px] lg:min-h-full bg-[#F3ECE2] border-t lg:border-t-0 lg:border-l border-[#E8E1D7]">
-              {!welcomeImgFailed ? (
-                <img
-                  src={welcomeBotanicalImg}
-                  alt="Open linen journal with pressed sage and burgundy botanical sprigs on cream paper"
-                  referrerPolicy="no-referrer"
-                  onError={() => setWelcomeImgFailed(true)}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-gradient-to-br from-[#FBF4F2] to-[#EFE6DA]">
-                  <BookOpen className="w-8 h-8 text-[#800020]" />
-                  <p className="mt-2 font-display text-lg text-[#292522]">My Day Journal</p>
-                </div>
-              )}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="min-w-0">
+                {editingSpaceName ? (
+                  <form onSubmit={handleSaveSpaceName} className="flex items-center gap-2 max-w-md">
+                    <input
+                      type="text"
+                      value={spaceNameDraft}
+                      onChange={(e) => setSpaceNameDraft(e.target.value)}
+                      placeholder="Your name (e.g., Ay, Maya)"
+                      aria-label="Personalize your space name"
+                      className="flex-1 px-3 py-1.5 rounded-xl bg-[#F8F5F0] dark:bg-[#141414] border border-[#E6DFD5] dark:border-[#34312D] text-lg font-display text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      className="px-3 py-1.5 rounded-xl text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] whitespace-nowrap"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingSpaceName(false)}
+                      className="px-2.5 py-1.5 rounded-xl text-xs text-[#6E6359] dark:text-[#A69E94]"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <div className="flex items-center gap-2.5">
+                    <h1 className="font-display text-3xl sm:text-[38px] font-semibold tracking-[-0.02em] text-[#292522] dark:text-[#F3EFEA] truncate">
+                      {displaySpaceTitle}
+                    </h1>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSpaceNameDraft(companion.preferredName);
+                        setEditingSpaceName(true);
+                      }}
+                      aria-label="Personalize space title"
+                      title="Personalize space title"
+                      className="p-1.5 rounded-lg text-[#A69A8D] dark:text-[#8E867E] hover:text-[#292522] dark:hover:text-[#F3EFEA] hover:bg-[#F4EFE7] dark:hover:bg-[#282624] transition-colors shrink-0"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                <p className="mt-1 text-xs sm:text-sm text-[#6E6359] dark:text-[#A69E94] tabular-nums">
+                  <span>
+                    {pendingTodayTasks} {pendingTodayTasks === 1 ? 'task' : 'tasks'} left today
+                  </span>
+                  <span aria-hidden="true" className="text-[#A69A8D] dark:text-[#5C5650]"> · </span>
+                  <span>
+                    {nextRoutineItem
+                      ? `Up next: ${nextRoutineItem.title} at ${formatTime12h(nextRoutineItem.time)}`
+                      : 'Routine complete'}
+                  </span>
+                  <span aria-hidden="true" className="text-[#A69A8D] dark:text-[#5C5650]"> · </span>
+                  <span>
+                    {habitsMetToday}/{habits.length} habits blooming
+                  </span>
+                </p>
+              </div>
+
+              {/* Live Focus Timer Right in the Space Header */}
+              <FocusTimerCard onNotify={onNotify} />
             </div>
           </div>
         </motion.section>
@@ -550,1257 +752,1264 @@ export function Dashboard({
         {/* Preserved Dismissible Quick Guide */}
         {showGuide && (
           <motion.section
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.28, delay: 0.03, ease: EASE_OUT }}
+            transition={{ duration: 0.25, ease: EASE_OUT }}
             aria-label="How My Day works"
-            className="rounded-2xl bg-[#FFFDF9] border border-[#E8E1D7] p-5 sm:p-6 shadow-[0_1px_3px_rgba(41,37,34,0.04)]"
+            className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-5 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="font-sans text-[15px] font-semibold text-[#292522]">
-                  How My Day works
+                <h2 className="font-sans text-[15px] font-semibold text-[#292522] dark:text-[#F3EFEA]">
+                  Welcome to your personal space
                 </h2>
-                <p className="mt-0.5 text-xs text-[#6E6359]">
-                  Everything saves automatically in your browser—tap to check off, write, or grow your garden.
+                <p className="mt-0.5 text-xs text-[#6E6359] dark:text-[#A69E94]">
+                  Everything saves automatically in your browser. Click any focus card to filter tasks, check off habits, or write in your journal.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={onDismissGuide}
                 aria-label="Dismiss guide"
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-[#6E6359] hover:text-[#292522] hover:bg-[#F8F5F0] transition-colors shrink-0 whitespace-nowrap"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA] hover:bg-[#F4EFE7] dark:hover:bg-[#282624] transition-colors shrink-0 whitespace-nowrap"
               >
                 <span>Got it</span>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
-
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3.5">
-              <button
-                type="button"
-                onClick={() => onNavigate('routine')}
-                className="text-left rounded-xl bg-[#F8F5F0] border border-[#E8E1D7] p-4 hover:border-[#800020]/35 transition-colors"
-              >
-                <p className="text-xs font-semibold text-[#800020]">1. Follow your Routine</p>
-                <p className="mt-1 text-xs text-[#5C534D] leading-relaxed">
-                  Tap any block in your 9 AM – 10:30 PM timetable to mark it done or edit the time.
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigate('todos')}
-                className="text-left rounded-xl bg-[#F8F5F0] border border-[#E8E1D7] p-4 hover:border-[#800020]/35 transition-colors"
-              >
-                <p className="text-xs font-semibold text-[#800020]">2. Add To-Dos Anywhere</p>
-                <p className="mt-1 text-xs text-[#5C534D] leading-relaxed">
-                  Tasks added here or in To-Do List stay synced across your Weekly Planner.
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  gardenSectionRef.current?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'center',
-                  })
-                }
-                className="text-left rounded-xl bg-[#F8F5F0] border border-[#E8E1D7] p-4 hover:border-[#800020]/35 transition-colors"
-              >
-                <p className="text-xs font-semibold text-[#800020]">3. Grow Your Habit Garden</p>
-                <p className="mt-1 text-xs text-[#5C534D] leading-relaxed">
-                  Log Water, Exercise, Studying, Reading, and English Practice to bloom each plant.
-                </p>
-              </button>
-            </div>
           </motion.section>
         )}
 
-        {/* 2 & 3. Editorial Duo: Daily Affirmation + Interactive Mood Check-In */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-          {/* Daily Affirmation Card */}
-          <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.05, ease: EASE_OUT }}
-            aria-label="Daily Affirmation"
-            className="lg:col-span-5 rounded-3xl bg-[#FAF3F1] border border-[#EAD9D8] p-6 sm:p-7 flex flex-col justify-between gap-5 shadow-[0_1px_4px_rgba(128,0,32,0.04)]"
-          >
-            <div className="flex items-start justify-between gap-4">
+        {/* 2. Three-Column Editorial Notion Workspace Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-5 items-start">
+          {/* ================= LEFT RAIL (3 cols) ================= */}
+          <div className="xl:col-span-3 space-y-5 order-2 xl:order-1">
+            {/* Vignette + Navigation Links */}
+            <section
+              aria-label="Workspace Navigation"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 space-y-4 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none"
+            >
+              <MoodboardVignetteCard
+                dateLabel={compactDateBadge}
+                spaceName={displaySpaceTitle}
+              />
+
               <div>
-                <p className="text-xs font-medium tracking-wide text-[#800020]">
-                  Daily Affirmation
+                <p className="px-2 mb-2 font-display text-sm font-medium text-[#292522] dark:text-[#F3EFEA]">
+                  navigation
                 </p>
-                <p className="mt-0.5 text-xs text-[#6E6359]">{quote.author}</p>
+                <div className="space-y-1">
+                  {[
+                    { tab: 'routine' as AppTab, label: 'routines & schedule', icon: Clock },
+                    { tab: 'todos' as AppTab, label: 'planning space', icon: CheckSquare },
+                    { tab: 'weekly' as AppTab, label: 'weekly planner', icon: CalendarDays },
+                    { tab: 'habits' as AppTab, label: 'habit garden', icon: Activity },
+                    { tab: 'notes' as AppTab, label: 'notes & archive', icon: StickyNote },
+                  ].map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.tab}
+                        type="button"
+                        onClick={() => onNavigate(item.tab)}
+                        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] hover:bg-[#F4EFE7] dark:hover:bg-[#262422] hover:text-[#292522] dark:hover:text-[#F3EFEA] transition-colors whitespace-nowrap"
+                      >
+                        <span className="flex items-center gap-2.5 min-w-0">
+                          <Icon className="w-3.5 h-3.5 text-[#800020] dark:text-[#D4A85E] shrink-0" />
+                          <span className="truncate">{item.label}</span>
+                        </span>
+                        <ArrowRight className="w-3 h-3 text-[#A69A8D] dark:text-[#78716A] shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="w-16 h-16 rounded-2xl overflow-hidden border border-[#EAD9D8] bg-[#FFFDF9] shrink-0">
-                {!emblemImgFailed ? (
-                  <img
-                    src={affirmationCamelliaImg}
-                    alt="Watercolor burgundy camellia flower illustration"
-                    referrerPolicy="no-referrer"
-                    onError={() => setEmblemImgFailed(true)}
-                    className="w-full h-full object-cover"
+            </section>
+
+            {/* Editorial "main character" Cream Stationery Tile (Editable) */}
+            <section
+              aria-label="Personal Mantra"
+              className="rounded-2xl bg-[#FAF6EE] border border-[#E5DDD0] dark:border-[#34312D] p-5 text-center shadow-[0_1px_3px_rgba(41,37,34,0.04)]"
+            >
+              {editingMantra ? (
+                <form onSubmit={handleSaveMantra} className="space-y-2">
+                  <input
+                    type="text"
+                    value={mantraDraft}
+                    onChange={(e) => setMantraDraft(e.target.value)}
+                    placeholder="e.g., main character"
+                    aria-label="Edit personal mantra"
+                    className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#D8CFC3] text-center font-display italic text-lg text-[#292522] focus:outline-none focus:border-[#800020]"
+                    autoFocus
                   />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[#800020]">
-                    <Sparkles className="w-5 h-5" />
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      type="submit"
+                      className="px-3 py-1 rounded-lg text-[11px] font-medium bg-[#800020] text-white"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingMantra(false)}
+                      className="px-2 py-1 rounded-lg text-[11px] text-[#6E6359]"
+                    >
+                      Cancel
+                    </button>
                   </div>
-                )}
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMantraDraft(companion.mantra);
+                    setEditingMantra(true);
+                  }}
+                  title="Click to customize your personal mantra"
+                  className="w-full group py-2"
+                >
+                  <p className="font-display italic text-2xl sm:text-[26px] font-medium text-[#292522] tracking-tight leading-snug">
+                    {companion.mantra}
+                  </p>
+                  <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-widest text-[#8C8073] opacity-70 group-hover:opacity-100 transition-opacity">
+                    <Pencil className="w-2.5 h-2.5" />
+                    <span>tap to edit mantra</span>
+                  </span>
+                </button>
+              )}
+            </section>
+
+            {/* Daily Habits Checklist Widget (Notion-style embedded tracker) */}
+            <section
+              aria-label="Daily Habits Checklist"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 sm:p-5 space-y-3.5 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h2 className="font-sans text-sm font-semibold text-[#292522] dark:text-[#F3EFEA]">
+                    daily habits
+                  </h2>
+                  <p className="mt-0.5 font-mono text-[11px] text-[#6E6359] dark:text-[#A69E94] tabular-nums">
+                    {shortDateLabel} · {habitsMetToday}/{habits.length} done
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    gardenSectionRef.current?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'center',
+                    })
+                  }
+                  className="text-[11px] font-medium text-[#800020] dark:text-[#D4A85E] hover:underline whitespace-nowrap"
+                >
+                  Garden
+                </button>
               </div>
-            </div>
 
-            <blockquote className="font-display italic text-xl sm:text-[22px] text-[#292522] leading-[1.45]">
-              &ldquo;{quote.text}&rdquo;
-            </blockquote>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#EAD9D8]">
-              <button
-                type="button"
-                onClick={handleReflectOnAffirmation}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#800020] hover:underline whitespace-nowrap"
-              >
-                <Feather className="w-3.5 h-3.5" />
-                <span>Reflect in journal</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setQuoteIdx((prev) => prev + 1)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-[#5C534D] bg-[#FFFDF9] border border-[#E8D8D8] hover:text-[#292522] hover:border-[#CBBFB2] transition-colors whitespace-nowrap"
-              >
-                <RefreshCw className="w-3 h-3" />
-                <span>New affirmation</span>
-              </button>
-            </div>
-          </motion.section>
-
-          {/* Interactive Mood Check-In */}
-          <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.08, ease: EASE_OUT }}
-            aria-label="Mood Check-In"
-            className="lg:col-span-7 rounded-3xl bg-[#FFFDF9] border border-[#E8E1D7] p-6 sm:p-7 flex flex-col justify-between gap-5 shadow-[0_1px_4px_rgba(41,37,34,0.04)]"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-medium text-[#292522]">
-                  How does today feel?
-                </h2>
-                <p className="mt-1 text-xs text-[#6E6359]">
-                  {selectedMoodObj
-                    ? `Checked in as ${selectedMoodObj.label} today · Saved automatically`
-                    : 'Tap an expression to check in with yourself'}
-                </p>
+              {/* Champagne-gold habit summary bar */}
+              <div className="h-1.5 w-full rounded-full bg-[#EFE9E0] dark:bg-[#2A2825] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-[#B5853B] dark:bg-[#C89B54] transition-all duration-300"
+                  style={{
+                    width: `${habits.length === 0 ? 0 : Math.round((habitsMetToday / habits.length) * 100)}%`,
+                  }}
+                />
               </div>
 
-              {/* 7-day Mood Ribbon */}
-              <div
-                aria-label="7-day mood history"
-                className="flex items-center gap-1.5"
-              >
-                {recentMoodRibbon.map((slot) => (
-                  <div
-                    key={slot.iso}
-                    title={
-                      slot.moodMeta
-                        ? `${slot.iso}: ${slot.moodMeta.label}`
-                        : `${slot.iso}: Not logged`
-                    }
-                    className="flex flex-col items-center gap-1"
-                  >
+              <div className="space-y-2">
+                {habits.map((habit) => {
+                  const isMet = habit.todayValue >= habit.targetValue;
+                  return (
+                    <div
+                      key={habit.key}
+                      className="flex items-center justify-between gap-2 rounded-xl px-2.5 py-2 bg-[#F8F5F0]/75 dark:bg-[#161616] border border-[#EAE3D9] dark:border-[#292724]"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleHabitBloomToggle(habit)}
+                        className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+                      >
+                        <span
+                          className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                            isMet
+                              ? 'bg-[#800020] dark:bg-[#C89B54] border-[#800020] dark:border-[#C89B54] text-[#FFFDF9] dark:text-[#141414]'
+                              : 'border-[#CBBFB2] dark:border-[#49443E] bg-[#FFFDF9] dark:bg-[#1E1E1E]'
+                          }`}
+                        >
+                          {isMet && <Check className="w-3 h-3" />}
+                        </span>
+                        <div className="min-w-0">
+                          <p
+                            className={`text-xs font-medium truncate ${
+                              isMet
+                                ? 'line-through text-[#8C8278] dark:text-[#7D766E]'
+                                : 'text-[#292522] dark:text-[#F3EFEA]'
+                            }`}
+                          >
+                            {habit.name}
+                          </p>
+                          <p className="font-mono text-[10px] text-[#6E6359] dark:text-[#9E958C] tabular-nums">
+                            {habit.todayValue}/{habit.targetValue} {habit.unit}
+                          </p>
+                        </div>
+                      </button>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => onAdjustHabit(habit.key, -habit.step)}
+                          disabled={habit.todayValue <= 0}
+                          aria-label={`Decrease ${habit.name}`}
+                          className="w-6 h-6 rounded-md border border-[#E6DFD5] dark:border-[#34312D] bg-[#FFFDF9] dark:bg-[#222120] flex items-center justify-center text-[#4F4740] dark:text-[#CFC7BE] disabled:opacity-35"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleHabitIncrement(habit)}
+                          aria-label={`Increase ${habit.name}`}
+                          className="w-6 h-6 rounded-md bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] flex items-center justify-center"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Interactive Mood Check-In */}
+            <section
+              aria-label="Mood Check-In"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 sm:p-5 space-y-3.5 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h2 className="font-sans text-sm font-semibold text-[#292522] dark:text-[#F3EFEA]">
+                    mood check-in
+                  </h2>
+                  <p className="mt-0.5 text-[11px] text-[#6E6359] dark:text-[#A69E94]">
+                    {selectedMoodObj
+                      ? `Feeling ${selectedMoodObj.label.toLowerCase()} today`
+                      : 'How does today feel?'}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1" aria-label="7-day mood history">
+                  {recentMoodRibbon.map((slot) => (
                     <span
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs border ${
+                      key={slot.iso}
+                      title={
                         slot.moodMeta
-                          ? 'bg-[#FAF3F1] border-[#E8D0D4]'
+                          ? `${slot.iso}: ${slot.moodMeta.label}`
+                          : `${slot.iso}: Not logged`
+                      }
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] border ${
+                        slot.moodMeta
+                          ? 'bg-[#FAF3F1] dark:bg-[#2A2224] border-[#E8D0D4] dark:border-[#4A3339]'
                           : slot.isToday
-                            ? 'border-[#800020]/40 border-dashed bg-[#F8F5F0]'
-                            : 'border-[#E8E1D7] bg-[#F8F5F0]/60'
+                            ? 'border-[#800020]/50 dark:border-[#D4A85E]/50 border-dashed'
+                            : 'border-[#E6DFD5] dark:border-[#2E2C29]'
                       }`}
                     >
                       {slot.moodMeta ? slot.moodMeta.emoji : ''}
                     </span>
-                    <span
-                      className={`text-[10px] ${
-                        slot.isToday ? 'font-semibold text-[#800020]' : 'text-[#6E6359]'
-                      }`}
-                    >
-                      {slot.dayLabel}
-                    </span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Expressive Emoji Selector */}
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-              {MOOD_OPTIONS.map((option) => {
-                const active = todayMoodEntry?.mood === option.key;
-                return (
-                  <motion.button
-                    key={option.key}
-                    type="button"
-                    whileTap={{ scale: 0.96 }}
-                    whileHover={{ y: -2 }}
-                    transition={{ duration: 0.14 }}
-                    onClick={() => handleSelectMood(option.key, option.label)}
-                    aria-pressed={active}
-                    className={`flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl border transition-colors min-h-[76px] ${
-                      active
-                        ? 'bg-[#FAF3F1] border-[#800020] shadow-[0_2px_10px_rgba(128,0,32,0.1)]'
-                        : 'bg-[#F8F5F0]/75 border-[#E8E1D7] hover:border-[#CBBFB2] hover:bg-[#FFFDF9]'
-                    }`}
-                  >
-                    <span className="text-2xl leading-none" role="img" aria-hidden="true">
-                      {option.emoji}
-                    </span>
-                    <span
-                      className={`text-xs font-medium ${
-                        active ? 'text-[#800020]' : 'text-[#4F4740]'
+              <div className="grid grid-cols-3 gap-1.5">
+                {MOOD_OPTIONS.map((option) => {
+                  const active = todayMoodEntry?.mood === option.key;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => handleSelectMood(option.key, option.label)}
+                      aria-pressed={active}
+                      className={`flex flex-col items-center justify-center gap-1 py-2 px-1.5 rounded-xl border transition-all ${
+                        active
+                          ? 'bg-[#FAF3F1] dark:bg-[#2A2224] border-[#800020] dark:border-[#D4A85E]'
+                          : 'bg-[#F8F5F0]/75 dark:bg-[#161616] border-[#E6DFD5] dark:border-[#2E2C29] hover:border-[#CBBFB2] dark:hover:border-[#49443E]'
                       }`}
                     >
-                      {option.label}
-                    </span>
-                  </motion.button>
-                );
-              })}
-            </div>
+                      <span className="text-lg leading-none" role="img" aria-hidden="true">
+                        {option.emoji}
+                      </span>
+                      <span
+                        className={`text-[10px] font-medium ${
+                          active
+                            ? 'text-[#800020] dark:text-[#D4A85E]'
+                            : 'text-[#4F4740] dark:text-[#CFC7BE]'
+                        }`}
+                      >
+                        {option.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
-            {/* Empathetic Response + Optional Mood Note */}
-            <div className="pt-3 border-t border-[#EFE9E0]">
-              {selectedMoodObj ? (
-                <div className="space-y-2.5">
-                  <p className="text-xs sm:text-sm text-[#4F4740] leading-relaxed">
+              {selectedMoodObj && (
+                <div className="pt-2.5 border-t border-[#EFE9E0] dark:border-[#2A2825] space-y-2">
+                  <p className="text-[11px] text-[#5C534D] dark:text-[#BFB7AD] leading-relaxed">
                     {selectedMoodObj.response}
                   </p>
-
                   {moodNoteDraft !== null ? (
-                    <form onSubmit={handleSaveMoodNote} className="flex items-center gap-2">
+                    <form onSubmit={handleSaveMoodNote} className="flex items-center gap-1.5">
                       <input
                         type="text"
                         value={moodNoteDraft}
                         onChange={(e) => setMoodNoteDraft(e.target.value)}
-                        placeholder="Add a brief note about how you feel..."
+                        placeholder="Add a mood note..."
                         aria-label="Mood check-in note"
-                        className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-[#F8F5F0] border border-[#E8E1D7] text-xs text-[#292522] focus:outline-none focus:border-[#800020]"
+                        className="flex-1 min-w-0 px-2.5 py-1 rounded-lg bg-[#F8F5F0] dark:bg-[#141414] border border-[#E6DFD5] dark:border-[#34312D] text-[11px] text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
                         autoFocus
                       />
                       <button
                         type="submit"
-                        className="px-3 py-1.5 rounded-xl text-xs font-medium bg-[#800020] text-[#FFFDF9] hover:bg-[#66001A] transition-colors whitespace-nowrap"
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414]"
                       >
                         Save
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setMoodNoteDraft(null)}
-                        className="px-2.5 py-1.5 rounded-xl text-xs text-[#6E6359] hover:text-[#292522]"
-                      >
-                        Cancel
-                      </button>
                     </form>
                   ) : (
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs text-[#6E6359] italic truncate">
-                        {todayMoodEntry?.note
-                          ? `Note: "${todayMoodEntry.note}"`
-                          : 'Want to jot down why you feel this way?'}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setMoodNoteDraft(todayMoodEntry?.note || '')}
-                        className="text-xs font-medium text-[#800020] hover:underline whitespace-nowrap shrink-0"
-                      >
-                        {todayMoodEntry?.note ? 'Edit note' : 'Add note'}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMoodNoteDraft(todayMoodEntry?.note || '')}
+                      className="text-[11px] font-medium text-[#800020] dark:text-[#D4A85E] hover:underline"
+                    >
+                      {todayMoodEntry?.note ? `“${todayMoodEntry.note}” · Edit` : '+ Add mood note'}
+                    </button>
                   )}
                 </div>
-              ) : (
-                <p className="text-xs text-[#6E6359]">
-                  Checking in takes two seconds and builds a gentle 7-day emotional pattern above.
-                </p>
               )}
-            </div>
-          </motion.section>
-        </div>
-
-        {/* 4. Visually Beautiful Daily Progress Tracker */}
-        <motion.section
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.1, ease: EASE_OUT }}
-          aria-label="Daily Progress Tracker"
-          className="rounded-3xl bg-[#FFFDF9] border border-[#E8E1D7] p-6 sm:p-7 shadow-[0_1px_4px_rgba(41,37,34,0.04)]"
-        >
-          <div className="flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-10">
-            <div className="flex items-center gap-5 shrink-0">
-              <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
-                <svg className="w-24 h-24 -rotate-90" viewBox="0 0 96 96" aria-hidden="true">
-                  <circle
-                    cx="48"
-                    cy="48"
-                    r={ringRadius}
-                    fill="none"
-                    stroke="#EFE9E0"
-                    strokeWidth="6.5"
-                  />
-                  <circle
-                    cx="48"
-                    cy="48"
-                    r={ringRadius}
-                    fill="none"
-                    stroke="#800020"
-                    strokeWidth="6.5"
-                    strokeLinecap="round"
-                    strokeDasharray={ringCircumference}
-                    strokeDashoffset={ringOffset}
-                    className="transition-all duration-500 ease-out"
-                  />
-                </svg>
-                <span className="absolute font-mono text-lg font-semibold text-[#292522] tabular-nums">
-                  {overallProgressPct}%
-                </span>
-              </div>
-
-              <div>
-                <p className="text-xs font-medium text-[#800020]">
-                  {getMomentumPhrase(overallProgressPct)}
-                </p>
-                <h2 className="mt-0.5 text-xl font-medium text-[#292522]">
-                  Today&apos;s Rhythm
-                </h2>
-                <p className="mt-1 text-xs text-[#6E6359] tabular-nums">
-                  {completedDailyPillars} of {totalDailyPillars} tasks, routine blocks &amp; habits completed
-                </p>
-              </div>
-            </div>
-
-            <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4 pt-5 lg:pt-0 border-t lg:border-t-0 lg:border-l border-[#EFE9E0] lg:pl-8">
-              <button
-                type="button"
-                onClick={() => {
-                  setTaskFilter('Pending');
-                  tasksSectionRef.current?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'nearest',
-                  });
-                }}
-                className="text-left rounded-2xl bg-[#F8F5F0]/80 hover:bg-[#F8F5F0] p-3.5 transition-colors"
-              >
-                <p className="text-xs text-[#6E6359]">Pending Tasks</p>
-                <p className="mt-1 font-mono text-2xl font-semibold text-[#800020] tabular-nums">
-                  {pendingTasks}
-                </p>
-                <p className="mt-0.5 text-[11px] text-[#6E6359] tabular-nums">
-                  {highPriorityPending > 0
-                    ? `${highPriorityPending} high priority`
-                    : `${todayDay} focus`}
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setTaskFilter('Completed');
-                  tasksSectionRef.current?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'nearest',
-                  });
-                }}
-                className="text-left rounded-2xl bg-[#F8F5F0]/80 hover:bg-[#F8F5F0] p-3.5 transition-colors"
-              >
-                <p className="text-xs text-[#6E6359]">Completed Tasks</p>
-                <p className="mt-1 font-mono text-2xl font-semibold text-[#292522] tabular-nums">
-                  {completedTasks}
-                  <span className="text-sm font-normal text-[#A69A8D]">/{todayTasks.length}</span>
-                </p>
-                <p className="mt-0.5 text-[11px] text-[#6E6359] tabular-nums">
-                  {tasksPct}% done
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigate('routine')}
-                className="text-left rounded-2xl bg-[#F8F5F0]/80 hover:bg-[#F8F5F0] p-3.5 transition-colors"
-              >
-                <p className="text-xs text-[#6E6359]">Routine Flow</p>
-                <p className="mt-1 font-mono text-2xl font-semibold text-[#292522] tabular-nums">
-                  {completedRoutine}
-                  <span className="text-sm font-normal text-[#A69A8D]">/{routine.length}</span>
-                </p>
-                <p className="mt-0.5 text-[11px] text-[#6E6359] tabular-nums">
-                  {routinePct}% complete
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  gardenSectionRef.current?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'center',
-                  })
-                }
-                className="text-left rounded-2xl bg-[#F8F5F0]/80 hover:bg-[#F8F5F0] p-3.5 transition-colors"
-              >
-                <p className="text-xs text-[#6E6359]">Garden Blooms</p>
-                <p className="mt-1 font-mono text-2xl font-semibold text-[#2D6A4F] tabular-nums">
-                  {habitsMetToday}
-                  <span className="text-sm font-normal text-[#A69A8D]">/{habits.length}</span>
-                </p>
-                <p className="mt-0.5 text-[11px] text-[#6E6359] tabular-nums">
-                  {habitsPct}% blooming
-                </p>
-              </button>
-            </div>
+            </section>
           </div>
-        </motion.section>
 
-        {/* 5. Daily Schedule & Task Timeline */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Today's Tasks (7 cols) */}
-          <motion.section
-            ref={tasksSectionRef}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.12, ease: EASE_OUT }}
-            aria-label="Today's Tasks"
-            className="lg:col-span-7 space-y-4"
-          >
-            <div className="flex flex-wrap items-end justify-between gap-3 min-h-[46px]">
-              <div>
-                <h2 className="text-2xl font-medium text-[#292522]">
-                  Today&apos;s Intentions
-                </h2>
-                <p className="mt-0.5 text-xs text-[#6E6359] tabular-nums">
-                  {pendingTasks} pending
-                  <span aria-hidden="true" className="text-[#A69A8D]"> · </span>
-                  {completedTasks} completed
-                  <span aria-hidden="true" className="text-[#A69A8D]"> · </span>
-                  {todayDay}
-                </p>
+          {/* ================= CENTER STAGE (6 cols) ================= */}
+          <div className="xl:col-span-6 space-y-5 order-1 xl:order-2 md:col-span-2">
+            {/* Focus Areas Gallery ("my focus spaces" inspired by "my courses") */}
+            <section
+              aria-label="My Focus Spaces"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 sm:p-5 space-y-4 shadow-[0_1px_4px_rgba(41,37,34,0.04)] dark:shadow-none"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#B5853B] dark:text-[#D4A85E]" />
+                  <h2 className="font-display text-xl font-medium text-[#292522] dark:text-[#F3EFEA]">
+                    my focus spaces
+                  </h2>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div
+                    role="tablist"
+                    aria-label="Filter focus spaces"
+                    className="inline-flex items-center gap-0.5 p-1 rounded-xl bg-[#EFE9E0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2A2825]"
+                  >
+                    {(['Active', 'Completed', 'All'] as SpaceGalleryTab[]).map((tab) => {
+                      const active = spaceGalleryTab === tab;
+                      return (
+                        <button
+                          key={tab}
+                          type="button"
+                          role="tab"
+                          aria-selected={active}
+                          onClick={() => setSpaceGalleryTab(tab)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors whitespace-nowrap ${
+                            active
+                              ? 'bg-[#FFFDF9] dark:bg-[#262523] text-[#292522] dark:text-[#D4A85E] shadow-xs dark:shadow-none'
+                              : 'text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA]'
+                          }`}
+                        >
+                          {tab}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => openComposerForColumn('Medium')}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>New</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div
-                  role="tablist"
-                  aria-label="Filter today's tasks"
-                  className="inline-flex items-center gap-0.5 p-1 rounded-xl bg-[#EFE9E0]/90 border border-[#E8E1D7]"
-                >
-                  {(['All', 'Pending', 'Completed'] as DashboardTaskFilter[]).map((tab) => {
-                    const active = taskFilter === tab;
+              {visibleFocusSpaces.length === 0 ? (
+                <div className="rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2A2825] p-6 text-center">
+                  <p className="text-xs text-[#6E6359] dark:text-[#A69E94]">
+                    No focus spaces match this filter yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {visibleFocusSpaces.map((space) => {
+                    const isSelected = selectedCategory === space.category;
                     return (
                       <button
-                        key={tab}
+                        key={space.category}
                         type="button"
-                        role="tab"
-                        aria-selected={active}
-                        onClick={() => setTaskFilter(tab)}
-                        className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-150 whitespace-nowrap shrink-0 ${
-                          active
-                            ? 'bg-[#FFFDF9] text-[#292522] shadow-[0_1px_2px_rgba(41,37,34,0.08)]'
-                            : 'text-[#6E6359] hover:text-[#292522]'
+                        onClick={() =>
+                          setSelectedCategory((prev) =>
+                            prev === space.category ? null : space.category,
+                          )
+                        }
+                        className={`group text-left rounded-2xl overflow-hidden border transition-all duration-150 bg-[#F8F5F0]/80 dark:bg-[#242321] ${
+                          isSelected
+                            ? 'border-[#800020] dark:border-[#D4A85E] ring-2 ring-[#800020]/15 dark:ring-[#D4A85E]/20'
+                            : 'border-[#E6DFD5] dark:border-[#302E2B] hover:border-[#CBBFB2] dark:hover:border-[#4A4640] hover:-translate-y-0.5'
                         }`}
                       >
-                        {tab}
+                        <div className="h-24 w-full overflow-hidden">
+                          <FocusCategoryCover category={space.category} />
+                        </div>
+                        <div className="p-3 space-y-2">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="text-xs font-semibold text-[#292522] dark:text-[#F3EFEA] truncate">
+                              {space.category}
+                            </span>
+                            <span className="font-mono text-[10px] text-[#6E6359] dark:text-[#A69E94] tabular-nums shrink-0">
+                              {space.done}/{space.total}
+                            </span>
+                          </div>
+                          {/* Champagne-Gold Progress Bar */}
+                          <div className="h-1.5 w-full rounded-full bg-[#E6DFD5] dark:bg-[#35322E] overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-[#B5853B] dark:bg-[#C89B54] transition-all duration-300"
+                              style={{ width: `${space.pct}%` }}
+                            />
+                          </div>
+                        </div>
                       </button>
                     );
                   })}
                 </div>
+              )}
+            </section>
 
-                <button
-                  type="button"
-                  onClick={() => onNavigate('todos')}
-                  className="text-xs font-medium text-[#800020] hover:underline whitespace-nowrap shrink-0"
-                >
-                  Manage all
-                </button>
-              </div>
-            </div>
-
-            {/* Quick-Add Task Composer */}
-            <form
-              onSubmit={handleQuickTaskSubmit}
-              className="rounded-2xl bg-[#FFFDF9] border border-[#E8E1D7] p-3.5 shadow-[0_1px_3px_rgba(41,37,34,0.04)] focus-within:border-[#A69A8D] transition-colors space-y-2.5"
+            {/* Task & Assignment Tracker ("task tracker" inspired by "assignment tracker") */}
+            <section
+              ref={tasksSectionRef}
+              aria-label="Task Tracker"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 sm:p-5 space-y-4 shadow-[0_1px_4px_rgba(41,37,34,0.04)] dark:shadow-none"
             >
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={quickTaskTitle}
-                  onChange={(e) => setQuickTaskTitle(e.target.value)}
-                  placeholder={`Add a task or intention for ${todayDay}...`}
-                  aria-label="Quick add task for today"
-                  className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-[#F8F5F0] border border-[#E8E1D7] text-sm text-[#292522] placeholder:text-[#A69A8D] focus:outline-none focus:border-[#800020] transition-colors"
-                />
-                <button
-                  type="submit"
-                  disabled={!quickTaskTitle.trim()}
-                  aria-label="Add quick task"
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-medium bg-[#800020] text-[#FFFDF9] hover:bg-[#66001A] disabled:opacity-40 transition-colors shrink-0 whitespace-nowrap"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add</span>
-                </button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="time"
-                  value={quickTaskTime}
-                  onChange={(e) => setQuickTaskTime(e.target.value)}
-                  aria-label="Task time"
-                  className="px-2.5 py-1.5 rounded-lg bg-[#F8F5F0] border border-[#E8E1D7] text-xs font-mono text-[#292522] focus:outline-none focus:border-[#800020]"
-                />
-                <select
-                  value={quickTaskCategory}
-                  onChange={(e) => setQuickTaskCategory(e.target.value as TaskCategory)}
-                  aria-label="Task category"
-                  className="px-2.5 py-1.5 rounded-lg bg-[#F8F5F0] border border-[#E8E1D7] text-xs text-[#292522] focus:outline-none focus:border-[#800020]"
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={quickTaskPriority}
-                  onChange={(e) => setQuickTaskPriority(e.target.value as Priority)}
-                  aria-label="Task priority"
-                  className="px-2.5 py-1.5 rounded-lg bg-[#F8F5F0] border border-[#E8E1D7] text-xs text-[#292522] focus:outline-none focus:border-[#800020]"
-                >
-                  {PRIORITIES.map((p) => (
-                    <option key={p} value={p}>
-                      {p} priority
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </form>
-
-            {/* Task Cards */}
-            {visibleTodayTasks.length === 0 ? (
-              <div className="rounded-2xl bg-[#FFFDF9] border border-[#E8E1D7] px-6 py-10 text-center shadow-[0_1px_3px_rgba(41,37,34,0.04)]">
-                <p className="text-sm font-medium text-[#292522]">
-                  {todayTasks.length === 0
-                    ? `No tasks scheduled for ${todayDay} yet.`
-                    : taskFilter === 'Pending'
-                      ? 'Everything on today’s list is complete.'
-                      : 'No completed tasks yet today.'}
-                </p>
-                <p className="mt-1 text-xs text-[#6E6359]">
-                  {todayTasks.length === 0
-                    ? 'Add your first gentle priority above.'
-                    : taskFilter === 'Pending'
-                      ? 'Take a moment to appreciate what you finished.'
-                      : 'Check off any task to celebrate it here.'}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {visibleTodayTasks.map((task) => (
-                  <article
-                    key={task.id}
-                    className={`group rounded-2xl border px-4 py-3.5 transition-all duration-150 flex items-start justify-between gap-3 ${
-                      task.completed
-                        ? 'bg-[#FFFDF9]/70 border-[#EAE3D9]'
-                        : 'bg-[#FFFDF9] border-[#E8E1D7] shadow-[0_1px_2px_rgba(41,37,34,0.03)] hover:border-[#CBBFB2] hover:shadow-[0_4px_14px_rgba(41,37,34,0.06)] hover:-translate-y-[1px]'
-                    }`}
-                  >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <ListTodo className="w-4 h-4 text-[#800020] dark:text-[#D4A85E] shrink-0" />
+                  <h2 className="font-display text-xl font-medium text-[#292522] dark:text-[#F3EFEA] truncate">
+                    task tracker
+                  </h2>
+                  {selectedCategory && (
                     <button
                       type="button"
-                      onClick={() => handleToggleTaskWithFeedback(task)}
-                      aria-label={
-                        task.completed
-                          ? `Mark "${task.title}" incomplete`
-                          : `Complete "${task.title}"`
-                      }
-                      className="flex items-start gap-3.5 min-w-0 flex-1 text-left py-0.5"
+                      onClick={() => setSelectedCategory(null)}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium bg-[#FAF3F1] dark:bg-[#2B2520] text-[#800020] dark:text-[#D4A85E] border border-[#EAD9D8] dark:border-[#493E33] whitespace-nowrap"
                     >
-                      <span
-                        className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
-                          task.completed
-                            ? 'bg-[#800020] border-[#800020] text-[#FFFDF9]'
-                            : 'border-[#CFC5B8] bg-[#FFFDF9] group-hover:border-[#800020]'
-                        }`}
-                      >
-                        {task.completed && <Check className="w-3.5 h-3.5" />}
-                      </span>
-
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className={`text-sm sm:text-[15px] font-medium leading-snug ${
-                            task.completed ? 'line-through text-[#8C8278]' : 'text-[#292522]'
-                          }`}
-                        >
-                          {task.title}
-                        </p>
-
-                        {task.notes && (
-                          <p
-                            className={`mt-1 text-xs leading-relaxed ${
-                              task.completed ? 'text-[#A69A8D]' : 'text-[#6E6359]'
-                            }`}
-                          >
-                            {task.notes}
-                          </p>
-                        )}
-
-                        <p
-                          className={`mt-1.5 text-xs tabular-nums ${
-                            task.completed ? 'text-[#8C8278]' : 'text-[#6E6359]'
-                          }`}
-                        >
-                          <span className="font-mono">{formatTime12h(task.time)}</span>
-                          <span aria-hidden="true" className="text-[#A69A8D]"> · </span>
-                          <span>{task.category}</span>
-                          <span aria-hidden="true" className="text-[#A69A8D]"> · </span>
-                          <span
-                            className={
-                              task.completed ? 'text-[#8C8278]' : getPriorityTextClass(task.priority)
-                            }
-                          >
-                            {task.priority} priority
-                          </span>
-                        </p>
-                      </div>
+                      <span>{selectedCategory}</span>
+                      <X className="w-3 h-3" />
                     </button>
+                  )}
+                </div>
 
-                    {onDeleteTask && (
-                      <button
-                        type="button"
-                        onClick={() => onDeleteTask(task.id)}
-                        aria-label={`Delete "${task.title}"`}
-                        className="p-2 rounded-lg text-[#A69A8D] hover:text-[#800020] hover:bg-[#F8F5F0] transition-colors shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </article>
-                ))}
+                <div className="flex items-center gap-2">
+                  <div
+                    role="tablist"
+                    aria-label="Filter tracker tasks"
+                    className="inline-flex items-center gap-0.5 p-1 rounded-xl bg-[#EFE9E0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2A2825]"
+                  >
+                    {(['All', 'Pending', 'Completed'] as DashboardTaskFilter[]).map((tab) => {
+                      const active = taskFilter === tab;
+                      return (
+                        <button
+                          key={tab}
+                          type="button"
+                          role="tab"
+                          aria-selected={active}
+                          onClick={() => setTaskFilter(tab)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors whitespace-nowrap ${
+                            active
+                              ? 'bg-[#FFFDF9] dark:bg-[#262523] text-[#292522] dark:text-[#D4A85E] shadow-xs dark:shadow-none'
+                              : 'text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA]'
+                          }`}
+                        >
+                          {tab}
+                        </button>
+                      );
+                    })}
+                  </div>
 
-                {filteredTodayTasks.length > 6 && (
                   <button
                     type="button"
                     onClick={() => onNavigate('todos')}
-                    className="w-full py-2.5 rounded-xl text-xs font-medium text-[#6E6359] hover:text-[#800020] hover:bg-[#FFFDF9] border border-transparent hover:border-[#E8E1D7] transition-colors flex items-center justify-center gap-1.5"
+                    className="text-xs font-medium text-[#800020] dark:text-[#D4A85E] hover:underline whitespace-nowrap"
                   >
-                    <span>
-                      View all {filteredTodayTasks.length}{' '}
-                      {taskFilter === 'All' ? '' : `${taskFilter.toLowerCase()} `}tasks
-                    </span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            )}
-          </motion.section>
-
-          {/* Daily Schedule Timeline (5 cols) */}
-          <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.14, ease: EASE_OUT }}
-            aria-label="Daily Schedule Timeline"
-            className="lg:col-span-5 space-y-4"
-          >
-            <div className="flex items-end justify-between gap-3 min-h-[46px]">
-              <div>
-                <h2 className="text-2xl font-medium text-[#292522]">
-                  Daily Timeline
-                </h2>
-                <p className="mt-0.5 text-xs text-[#6E6359] tabular-nums">
-                  {remainingRoutine > 0
-                    ? `${remainingRoutine} ${remainingRoutine === 1 ? 'block' : 'blocks'} ahead today`
-                    : 'All routine blocks finished'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onNavigate('routine')}
-                className="text-xs font-medium text-[#800020] hover:underline whitespace-nowrap shrink-0"
-              >
-                Customize
-              </button>
-            </div>
-
-            <div className="rounded-3xl bg-[#FFFDF9] border border-[#E8E1D7] p-5 shadow-[0_1px_4px_rgba(41,37,34,0.04)]">
-              {upcomingRoutine.length === 0 ? (
-                <div className="py-10 text-center">
-                  <p className="text-sm text-[#6E6359]">No routine blocks scheduled yet.</p>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('routine')}
-                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[#800020] hover:underline"
-                  >
-                    <span>Open Daily Routine</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    All tasks
                   </button>
                 </div>
-              ) : (
-                <div>
-                  {upcomingRoutine.map((item, idx) => {
-                    const isUpNext = nextRoutineItem?.id === item.id;
-                    const isLast = idx === upcomingRoutine.length - 1;
-                    return (
-                      <div key={item.id} className="relative flex">
-                        {!isLast && (
-                          <span
-                            aria-hidden="true"
-                            className="absolute left-[19px] top-8 -bottom-3 w-px bg-[#E8E1D7]"
-                          />
-                        )}
+              </div>
 
-                        <button
-                          type="button"
-                          onClick={() => handleToggleRoutineWithFeedback(item)}
-                          aria-label={
-                            item.completed
-                              ? `Mark "${item.title}" incomplete`
-                              : `Complete "${item.title}"`
-                          }
-                          className={`w-full flex items-start gap-3.5 text-left rounded-xl px-2.5 py-2.5 group transition-colors duration-150 ${
-                            isUpNext ? 'bg-[#FAF3F1]/80' : 'hover:bg-[#F8F5F0]/75'
-                          }`}
-                        >
-                          <span
-                            className={`relative z-10 mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
-                              item.completed
-                                ? 'bg-[#800020] border-[#800020] text-[#FFFDF9]'
-                                : isUpNext
-                                  ? 'border-[#800020] bg-[#FFFDF9] ring-3 ring-[#800020]/10'
-                                  : 'border-[#CFC5B8] bg-[#FFFDF9] group-hover:border-[#800020]'
-                            }`}
-                          >
-                            {item.completed && <Check className="w-3 h-3" />}
-                          </span>
+              {/* Collapsible / Always-Ready Quick Task Composer */}
+              {composerOpen && (
+                <form
+                  onSubmit={handleQuickTaskSubmit}
+                  className="rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] p-3 space-y-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={quickTaskTitle}
+                      onChange={(e) => setQuickTaskTitle(e.target.value)}
+                      placeholder={`Add a task for ${selectedCategory || todayDay}...`}
+                      aria-label="Quick add task"
+                      className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#34312D] text-xs sm:text-sm text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#7D756D] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      disabled={!quickTaskTitle.trim()}
+                      className="px-3.5 py-2 rounded-lg text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] disabled:opacity-40 whitespace-nowrap"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setComposerOpen(false)}
+                      aria-label="Close quick task composer"
+                      className="p-2 rounded-lg text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA]"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
 
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span
-                                className={`font-mono text-xs font-medium tabular-nums ${
-                                  item.completed
-                                    ? 'text-[#8C8278]'
-                                    : isUpNext
-                                      ? 'text-[#800020]'
-                                      : 'text-[#6E6359]'
-                                }`}
-                              >
-                                {formatTime12h(item.time)}
-                              </span>
-                              {isUpNext && (
-                                <span className="text-[11px] font-medium text-[#800020] shrink-0">
-                                  Up next
-                                </span>
-                              )}
-                            </div>
-
-                            <p
-                              className={`mt-0.5 text-sm font-medium leading-snug ${
-                                item.completed ? 'line-through text-[#8C8278]' : 'text-[#292522]'
-                              }`}
-                            >
-                              {item.title}
-                            </p>
-
-                            <p
-                              className={`mt-0.5 text-xs truncate ${
-                                item.completed ? 'text-[#A69A8D]' : 'text-[#6E6359]'
-                              }`}
-                            >
-                              <span>{item.category}</span>
-                              {item.notes && (
-                                <>
-                                  <span aria-hidden="true" className="text-[#A69A8D]"> · </span>
-                                  <span>{item.notes}</span>
-                                </>
-                              )}
-                            </p>
-                          </div>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="time"
+                      value={quickTaskTime}
+                      onChange={(e) => setQuickTaskTime(e.target.value)}
+                      aria-label="Quick task time"
+                      className="px-2.5 py-1.5 rounded-lg bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#34312D] text-[11px] font-mono text-[#292522] dark:text-[#F3EFEA]"
+                    />
+                    <select
+                      value={selectedCategory || quickTaskCategory}
+                      onChange={(e) => setQuickTaskCategory(e.target.value as TaskCategory)}
+                      aria-label="Quick task category"
+                      className="px-2.5 py-1.5 rounded-lg bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#34312D] text-[11px] text-[#292522] dark:text-[#F3EFEA]"
+                    >
+                      {FOCUS_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={quickTaskPriority}
+                      onChange={(e) => setQuickTaskPriority(e.target.value as Priority)}
+                      aria-label="Quick task priority"
+                      className="px-2.5 py-1.5 rounded-lg bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#34312D] text-[11px] text-[#292522] dark:text-[#F3EFEA]"
+                    >
+                      {PRIORITIES.map((p) => (
+                        <option key={p} value={p}>
+                          {p} Priority
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </form>
               )}
 
-              <div className="mt-4 pt-3.5 border-t border-[#EFE9E0] flex items-center justify-between">
-                <span className="text-xs text-[#6E6359] tabular-nums">
-                  {completedRoutine} of {routine.length} blocks done
-                </span>
+              {/* 3-Column Board (To Do / High Priority / Completed) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  {
+                    id: 'todo',
+                    label: 'To Do',
+                    accentClass: 'text-[#6E6359] dark:text-[#A69E94]',
+                    dotColor: 'bg-[#A69A8D] dark:bg-[#8E867E]',
+                    items: todoColTasks,
+                    addPriority: 'Medium' as Priority,
+                  },
+                  {
+                    id: 'high',
+                    label: 'High Priority',
+                    accentClass: 'text-[#800020] dark:text-[#D4A85E]',
+                    dotColor: 'bg-[#800020] dark:bg-[#C89B54]',
+                    items: highPriorityColTasks,
+                    addPriority: 'High' as Priority,
+                  },
+                  {
+                    id: 'done',
+                    label: 'Completed',
+                    accentClass: 'text-[#4A6B53] dark:text-[#8AB896]',
+                    dotColor: 'bg-[#4A6B53] dark:bg-[#8AB896]',
+                    items: doneColTasks,
+                    addPriority: 'Low' as Priority,
+                  },
+                ].map((col) => (
+                  <div
+                    key={col.id}
+                    className="rounded-xl bg-[#F8F5F0]/80 dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2A2825] p-3 flex flex-col justify-between gap-3"
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-[#EAE3D9] dark:border-[#262422]">
+                        <span className={`flex items-center gap-1.5 text-xs font-semibold ${col.accentClass}`}>
+                          <span className={`w-2 h-2 rounded-full ${col.dotColor}`} aria-hidden="true" />
+                          <span>{col.label}</span>
+                        </span>
+                        <span className="font-mono text-[11px] text-[#6E6359] dark:text-[#9E958C] tabular-nums">
+                          {col.items.length}
+                        </span>
+                      </div>
+
+                      {col.items.length === 0 ? (
+                        <p className="py-4 text-[11px] text-[#8C8278] dark:text-[#78716A] text-center">
+                          Nothing here
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {col.items.slice(0, 5).map((task) => (
+                            <div
+                              key={task.id}
+                              className="group rounded-xl bg-[#FFFDF9] dark:bg-[#222120] border border-[#E6DFD5] dark:border-[#302E2B] p-2.5 hover:border-[#CBBFB2] dark:hover:border-[#4A4640] transition-colors flex items-start justify-between gap-2"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTaskWithFeedback(task)}
+                                className="flex items-start gap-2 min-w-0 flex-1 text-left"
+                              >
+                                <span
+                                  className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                                    task.completed
+                                      ? 'bg-[#800020] dark:bg-[#C89B54] border-[#800020] dark:border-[#C89B54] text-[#FFFDF9] dark:text-[#141414]'
+                                      : 'border-[#CFC5B8] dark:border-[#49443E] bg-[#FFFDF9] dark:bg-[#161616]'
+                                  }`}
+                                >
+                                  {task.completed && <Check className="w-2.5 h-2.5" />}
+                                </span>
+                                <div className="min-w-0">
+                                  <p
+                                    className={`text-xs font-medium leading-snug ${
+                                      task.completed
+                                        ? 'line-through text-[#8C8278] dark:text-[#7D766E]'
+                                        : 'text-[#292522] dark:text-[#F3EFEA]'
+                                    }`}
+                                  >
+                                    {task.title}
+                                  </p>
+                                  <p className="mt-1 font-mono text-[10px] text-[#6E6359] dark:text-[#9E958C] tabular-nums">
+                                    {formatTime12h(task.time)} · {task.category}
+                                  </p>
+                                </div>
+                              </button>
+
+                              {onDeleteTask && (
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteTask(task.id)}
+                                  aria-label={`Delete "${task.title}"`}
+                                  className="p-1 rounded-md text-[#8C8278] opacity-60 group-hover:opacity-100 hover:text-[#800020] dark:hover:text-[#E58A9B] transition-opacity shrink-0"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => openComposerForColumn(col.addPriority)}
+                      className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium text-[#6E6359] dark:text-[#9E958C] hover:text-[#292522] dark:hover:text-[#F3EFEA] hover:bg-[#EFE9E0]/70 dark:hover:bg-[#222120] transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>New task</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Today's Routine Timeline */}
+            <section
+              aria-label="Daily Schedule Timeline"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 sm:p-5 space-y-3.5 shadow-[0_1px_4px_rgba(41,37,34,0.04)] dark:shadow-none"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-display text-xl font-medium text-[#292522] dark:text-[#F3EFEA]">
+                    daily timeline
+                  </h2>
+                  <p className="mt-0.5 font-mono text-[11px] text-[#6E6359] dark:text-[#A69E94] tabular-nums">
+                    {completedRoutine}/{routine.length} blocks checked off
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => onNavigate('routine')}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-[#292522] hover:text-[#800020] transition-colors whitespace-nowrap"
+                  className="text-xs font-medium text-[#800020] dark:text-[#D4A85E] hover:underline whitespace-nowrap"
                 >
-                  <span>Full timetable</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  Full timetable
                 </button>
               </div>
-            </div>
-          </motion.section>
-        </div>
 
-        {/* 6. Habit Garden (Completing habits grows botanical plants) */}
-        <motion.section
-          ref={gardenSectionRef}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.16, ease: EASE_OUT }}
-          aria-label="Habit Garden"
-          className="rounded-3xl bg-[#FBF9F5] border border-[#E4DDD2] p-6 sm:p-8 shadow-[0_1px_4px_rgba(41,37,34,0.04)]"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-5 border-b border-[#EAE3D8]">
-            <div>
-              <p className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4A6B53]">
-                <Sprout className="w-3.5 h-3.5 shrink-0" />
-                <span>Living Habit Garden · {habitsMetToday} of {habits.length} in bloom today</span>
-              </p>
-              <h2 className="mt-1.5 text-2xl sm:text-[26px] font-medium text-[#292522]">
-                Nurture your daily rituals
-              </h2>
-              <p className="mt-1 text-xs sm:text-sm text-[#6E6359]">
-                Every glass, minute, and page read helps each plant grow from seed to full bloom.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => onNavigate('habits')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-[#FFFDF9] border border-[#E4DDD2] text-[#292522] hover:border-[#A69A8D] transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
-            >
-              <span>Adjust goals &amp; history</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {habits.map((habit) => {
-              const pct = Math.min(
-                100,
-                Math.round((habit.todayValue / habit.targetValue) * 100),
-              );
-              const isMet = habit.todayValue >= habit.targetValue;
-              const streak = computeHabitStreak(habit.weeklyHistory);
-              const species = getPlantSpecies(habit.key);
-              const stageLabel = getGrowthStageLabel(pct);
-
-              return (
-                <div
-                  key={habit.key}
-                  className={`rounded-2xl border p-4 flex flex-col justify-between gap-3 transition-all duration-200 ${
-                    isMet
-                      ? 'bg-[#FFFDF9] border-[#D7C3C6] shadow-[0_4px_14px_rgba(128,0,32,0.05)]'
-                      : 'bg-[#FFFDF9] border-[#E8E1D7] hover:border-[#CBBFB2]'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="font-sans text-sm font-semibold text-[#292522] truncate">
-                          {habit.name}
-                        </h3>
-                        <p className="text-[11px] text-[#6E6359] truncate">
-                          {species} · {stageLabel}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {upcomingRoutine.map((item) => {
+                  const isUpNext = nextRoutineItem?.id === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleToggleRoutineWithFeedback(item)}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border text-left transition-colors ${
+                        isUpNext
+                          ? 'bg-[#FAF3F1] dark:bg-[#26211F] border-[#E8D0D4] dark:border-[#C89B54]/45'
+                          : 'bg-[#F8F5F0]/75 dark:bg-[#161616] border-[#EAE3D9] dark:border-[#2A2825] hover:border-[#CBBFB2] dark:hover:border-[#49443E]'
+                      }`}
+                    >
+                      <span
+                        className={`w-4.5 h-4.5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                          item.completed
+                            ? 'bg-[#800020] dark:bg-[#C89B54] border-[#800020] dark:border-[#C89B54] text-[#FFFDF9] dark:text-[#141414]'
+                            : isUpNext
+                              ? 'border-[#800020] dark:border-[#D4A85E]'
+                              : 'border-[#CFC5B8] dark:border-[#49443E]'
+                        }`}
+                      >
+                        {item.completed && <Check className="w-2.5 h-2.5" />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={`text-xs font-medium truncate ${
+                            item.completed
+                              ? 'line-through text-[#8C8278] dark:text-[#7D766E]'
+                              : 'text-[#292522] dark:text-[#F3EFEA]'
+                          }`}
+                        >
+                          {item.title}
+                        </p>
+                        <p className="font-mono text-[10px] text-[#6E6359] dark:text-[#9E958C] tabular-nums">
+                          {formatTime12h(item.time)}
+                          {isUpNext && (
+                            <span className="text-[#800020] dark:text-[#D4A85E] font-medium">
+                              {' '}· up next
+                            </span>
+                          )}
                         </p>
                       </div>
-                      <span className="text-[11px] font-mono text-[#6E6359] tabular-nums shrink-0">
-                        {streak}d
-                      </span>
-                    </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
 
-                    <HabitGardenPlant habitKey={habit.key} progressPct={pct} />
+            {/* Living Habit Garden (Preserved Interactive Plant Growth) */}
+            <section
+              ref={gardenSectionRef}
+              aria-label="Habit Garden"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 sm:p-5 space-y-4 shadow-[0_1px_4px_rgba(41,37,34,0.04)] dark:shadow-none"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#4A6B53] dark:text-[#8AB896]">
+                    <Sprout className="w-3.5 h-3.5" />
+                    <span>Habit Garden · {bestStreak} day best streak · {weeklyHabitConsistency}% weekly</span>
+                  </p>
+                  <h2 className="mt-0.5 font-display text-xl font-medium text-[#292522] dark:text-[#F3EFEA]">
+                    nurture your botanical blooms
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('habits')}
+                  className="text-xs font-medium text-[#800020] dark:text-[#D4A85E] hover:underline whitespace-nowrap"
+                >
+                  Open habit tracker
+                </button>
+              </div>
 
-                    <div className="mt-1 flex items-baseline justify-between text-xs tabular-nums">
-                      <span className="font-mono font-semibold text-[#292522]">
-                        {habit.todayValue}
-                        <span className="font-normal text-[#6E6359]">
-                          {' '}/ {habit.targetValue} {habit.unit}
-                        </span>
-                      </span>
-                      <span
-                        className={`font-mono text-[11px] ${
-                          isMet ? 'text-[#4A6B53] font-medium' : 'text-[#6E6359]'
-                        }`}
-                      >
-                        {pct}%
-                      </span>
-                    </div>
-
-                    <div className="mt-2 h-1.5 w-full rounded-full bg-[#EFE9E0] overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-300 ${
-                          isMet ? 'bg-[#4A6B53]' : 'bg-[#800020]'
-                        }`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Interactive Watering / Bloom Controls */}
-                  <div className="pt-2 space-y-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => onAdjustHabit(habit.key, -habit.step)}
-                        disabled={habit.todayValue <= 0}
-                        aria-label={`Decrease ${habit.name}`}
-                        className="w-8 h-8 rounded-lg border border-[#E8E1D7] bg-[#F8F5F0] flex items-center justify-center text-[#292522] hover:bg-[#EFE9E0] disabled:opacity-35 transition-colors shrink-0"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleHabitIncrement(habit)}
-                        aria-label={`Increase ${habit.name}`}
-                        className="w-8 h-8 rounded-lg bg-[#800020] text-[#FFFDF9] flex items-center justify-center hover:bg-[#66001A] transition-colors shrink-0"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                {habits.map((habit) => {
+                  const pct = Math.min(100, Math.round((habit.todayValue / habit.targetValue) * 100));
+                  const isMet = habit.todayValue >= habit.targetValue;
+                  const stageLabel = getGrowthStageLabel(pct);
+                  return (
+                    <div
+                      key={habit.key}
+                      className={`rounded-xl border p-3 flex flex-col justify-between gap-2 transition-colors ${
+                        isMet
+                          ? 'bg-[#F5F9F6] dark:bg-[#19231D] border-[#C5DBC9] dark:border-[#344D3D]'
+                          : 'bg-[#F8F5F0]/80 dark:bg-[#161616] border-[#E6DFD5] dark:border-[#2A2825]'
+                      }`}
+                    >
+                      <HabitGardenPlant habitKey={habit.key} progressPct={pct} />
+                      <div className="text-center">
+                        <p className="text-xs font-semibold text-[#292522] dark:text-[#F3EFEA] truncate">
+                          {habit.name}
+                        </p>
+                        <p className="text-[10px] text-[#6E6359] dark:text-[#9E958C] truncate">
+                          {stageLabel}
+                        </p>
+                      </div>
                       <button
                         type="button"
                         onClick={() => handleHabitBloomToggle(habit)}
-                        className={`flex-1 h-8 px-2 rounded-lg text-[11px] font-medium border transition-colors whitespace-nowrap truncate ${
+                        className={`w-full py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
                           isMet
-                            ? 'bg-[#4A6B53] border-[#4A6B53] text-[#FFFDF9] hover:bg-[#3B5743]'
-                            : 'bg-[#FFFDF9] border-[#E8E1D7] text-[#292522] hover:border-[#800020] hover:text-[#800020]'
+                            ? 'bg-[#4A6B53] dark:bg-[#4E7559] text-[#FFFDF9]'
+                            : 'bg-[#FFFDF9] dark:bg-[#222120] border border-[#E6DFD5] dark:border-[#34312D] text-[#292522] dark:text-[#F3EFEA] hover:border-[#800020] dark:hover:border-[#D4A85E]'
                         }`}
                       >
                         {isMet ? 'Blooming' : 'Complete'}
                       </button>
                     </div>
-
-                    {/* 7-day leaf dots */}
-                    <div className="flex items-center justify-between pt-1 border-t border-[#F2ECE3]">
-                      {WEEK_DAYS.map((dayLbl, dIdx) => {
-                        const done = habit.weeklyHistory[dIdx];
-                        const isTodayCell = dIdx === todayIdx;
-                        return (
-                          <span
-                            key={dayLbl}
-                            title={`${dayLbl}: ${done ? 'Goal met' : 'Not met'}`}
-                            className={`w-2 h-2 rounded-full transition-colors ${
-                              done
-                                ? 'bg-[#4A6B53]'
-                                : isTodayCell
-                                  ? 'bg-[#800020]/25 ring-1 ring-[#800020]/50'
-                                  : 'bg-[#E6DDD0]'
-                            }`}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            </section>
           </div>
-        </motion.section>
 
-        {/* 7 & 8. Daily Journal Preview + Small Daily Challenge */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-          {/* Daily Journal Preview with Writing Interaction (7 cols) */}
-          <motion.section
-            ref={journalSectionRef}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.18, ease: EASE_OUT }}
-            aria-label="Daily Journal"
-            className="lg:col-span-7 rounded-3xl bg-[#FFFDF9] border border-[#E8E1D7] p-6 sm:p-7 flex flex-col justify-between gap-5 shadow-[0_1px_4px_rgba(41,37,34,0.04)]"
-          >
-            <div>
-              <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-[#EFE9E0]">
-                <div>
-                  <p className="text-xs font-medium text-[#800020]">Daily Journal</p>
-                  <h2 className="mt-0.5 text-2xl font-medium text-[#292522]">
-                    A page for your thoughts
-                  </h2>
-                </div>
+          {/* ================= RIGHT RAIL (3 cols) ================= */}
+          <div className="xl:col-span-3 space-y-5 order-3">
+            {/* My Affirmations ("my affirmations" + floral moodboard frame) */}
+            <section
+              aria-label="My Affirmations"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 sm:p-5 space-y-3.5 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-display text-lg font-medium text-[#292522] dark:text-[#F3EFEA]">
+                  my affirmations
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setAffirmationIdx((prev) => prev + 1)}
+                  aria-label="Shuffle affirmations"
+                  className="p-1.5 rounded-lg text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA] hover:bg-[#F4EFE7] dark:hover:bg-[#282624] transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
-                <div className="flex items-center gap-3">
+              <ul className="space-y-2 text-xs text-[#4F4740] dark:text-[#D5CFC7] leading-relaxed">
+                {affirmationSet.map((line, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-[#800020] dark:text-[#D4A85E] mt-0.5" aria-hidden="true">
+                      ▸
+                    </span>
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="h-28 rounded-xl overflow-hidden border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#FAF3F1] dark:bg-[#261D20]">
+                {!emblemImgFailed ? (
+                  <img
+                    src={affirmationCamelliaImg}
+                    alt="Watercolor burgundy floral illustration"
+                    referrerPolicy="no-referrer"
+                    onError={() => setEmblemImgFailed(true)}
+                    className="w-full h-full object-cover dark:brightness-[0.84] dark:contrast-[1.06]"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[#800020] dark:text-[#E58A9B]">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <p className="text-[11px] italic text-[#6E6359] dark:text-[#9E958C] truncate">
+                  {quote.author}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleReflectOnAffirmation}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-[#800020] dark:text-[#D4A85E] hover:underline whitespace-nowrap shrink-0"
+                >
+                  <Feather className="w-3 h-3" />
+                  <span>Reflect</span>
+                </button>
+              </div>
+            </section>
+
+            {/* Entries: Journal & Mind Dump + Cream Wax-Seal Envelope */}
+            <section
+              ref={entriesSectionRef}
+              aria-label="Entries: Journal and Mind Dump"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 sm:p-5 space-y-3.5 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-display text-lg font-medium text-[#292522] dark:text-[#F3EFEA]">
+                  entries
+                </h2>
+                <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-[#EFE9E0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2A2825]">
                   <button
                     type="button"
-                    onClick={() => setPromptIdx((prev) => prev + 1)}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6E6359] hover:text-[#292522] transition-colors whitespace-nowrap"
+                    onClick={() => setEntryMode('journal')}
+                    className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                      entryMode === 'journal'
+                        ? 'bg-[#FFFDF9] dark:bg-[#262523] text-[#292522] dark:text-[#D4A85E]'
+                        : 'text-[#6E6359] dark:text-[#A69E94]'
+                    }`}
                   >
-                    <RefreshCw className="w-3 h-3" />
-                    <span>New prompt</span>
+                    journal
                   </button>
                   <button
                     type="button"
-                    onClick={() => onNavigate('notes')}
-                    className="text-xs font-medium text-[#800020] hover:underline whitespace-nowrap"
+                    onClick={() => setEntryMode('minddump')}
+                    className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                      entryMode === 'minddump'
+                        ? 'bg-[#FFFDF9] dark:bg-[#262523] text-[#292522] dark:text-[#D4A85E]'
+                        : 'text-[#6E6359] dark:text-[#A69E94]'
+                    }`}
                   >
-                    Open Notes ({notes.length})
+                    mind dump
                   </button>
                 </div>
               </div>
 
-              <p className="mt-4 font-display italic text-sm sm:text-[15px] text-[#5C534D]">
-                Prompt: {currentPrompt}
-              </p>
+              {entryMode === 'journal' ? (
+                <form onSubmit={handleSaveJournal} className="space-y-2.5">
+                  <div className="flex items-start justify-between gap-2 rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2A2825] p-2.5">
+                    <p className="text-[11px] text-[#5C534D] dark:text-[#BFB7AD] italic leading-snug">
+                      {currentPrompt}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setPromptIdx((p) => p + 1)}
+                      aria-label="Next journal prompt"
+                      className="p-1 rounded-md text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA] shrink-0"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                    </button>
+                  </div>
 
-              <form onSubmit={handleSaveJournal} className="mt-3.5 space-y-3">
-                <input
-                  type="text"
-                  value={companion.journalDraftTitle}
-                  onChange={(e) =>
-                    setJournalDraft(e.target.value, companion.journalDraftContent)
-                  }
-                  placeholder="Entry title (optional)"
-                  aria-label="Journal entry title"
-                  className="w-full px-3.5 py-2 rounded-xl bg-[#F8F5F0]/70 border border-[#E8E1D7] text-sm font-medium text-[#292522] placeholder:text-[#A69A8D] focus:outline-none focus:border-[#800020] transition-colors"
-                />
+                  <input
+                    type="text"
+                    value={companion.journalDraftTitle}
+                    onChange={(e) =>
+                      setJournalDraft(e.target.value, companion.journalDraftContent)
+                    }
+                    placeholder="Entry title..."
+                    aria-label="Journal entry title"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F8F5F0]/80 dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-xs text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+                  />
 
-                <textarea
-                  ref={journalTextareaRef}
-                  rows={4}
-                  value={companion.journalDraftContent}
-                  onChange={(e) =>
-                    setJournalDraft(companion.journalDraftTitle, e.target.value)
-                  }
-                  placeholder="Write freely—your draft stays saved here until you publish it to your journal & notes..."
-                  aria-label="Journal entry text"
-                  className="w-full px-4 py-3 rounded-2xl bg-[#FAF7F2] border border-[#E8E1D7] text-sm text-[#292522] leading-relaxed placeholder:text-[#A69A8D] focus:outline-none focus:border-[#800020] transition-colors resize-y"
-                />
+                  <textarea
+                    ref={journalTextareaRef}
+                    rows={3}
+                    value={companion.journalDraftContent}
+                    onChange={(e) =>
+                      setJournalDraft(companion.journalDraftTitle, e.target.value)
+                    }
+                    placeholder="Write your thoughts gently..."
+                    aria-label="Journal entry body"
+                    className="w-full px-3 py-2 rounded-xl bg-[#F8F5F0]/80 dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-xs leading-relaxed text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E] resize-none"
+                  />
 
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <span className="text-xs text-[#6E6359]">
-                    {companion.journalDraftContent.trim()
-                      ? 'Draft auto-saved in browser'
-                      : 'Saved entries also sync to your Notes'}
-                  </span>
-
-                  <button
-                    type="submit"
-                    disabled={!companion.journalDraftContent.trim()}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium bg-[#800020] text-[#FFFDF9] hover:bg-[#66001A] disabled:opacity-40 transition-colors whitespace-nowrap"
-                  >
-                    <Feather className="w-3.5 h-3.5" />
-                    <span>Save Entry</span>
-                  </button>
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowPastEntries((s) => !s)}
+                      className="text-[11px] font-medium text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA]"
+                    >
+                      {showPastEntries
+                        ? 'Hide past entries'
+                        : `${companion.journalEntries.length} saved entries`}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!companion.journalDraftContent.trim()}
+                      className="px-3 py-1.5 rounded-xl text-[11px] font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] disabled:opacity-40 whitespace-nowrap"
+                    >
+                      Save Entry
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-2.5">
+                  <textarea
+                    rows={4}
+                    value={companion.mindDumpText}
+                    onChange={(e) => setMindDumpText(e.target.value)}
+                    placeholder="Clear your head here—every word auto-saves..."
+                    aria-label="Mind dump scratchpad"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#F8F5F0]/80 dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-xs leading-relaxed text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E] resize-none"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-[#6E6359] dark:text-[#9E958C]">
+                      Auto-saved locally
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleArchiveMindDump}
+                      disabled={!companion.mindDumpText.trim()}
+                      className="px-3 py-1.5 rounded-xl text-[11px] font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] disabled:opacity-40 whitespace-nowrap"
+                    >
+                      Archive to Notes
+                    </button>
+                  </div>
                 </div>
-              </form>
-            </div>
+              )}
 
-            {/* Recent Journal Entries Preview */}
-            {companion.journalEntries.length > 0 && (
-              <div className="pt-4 border-t border-[#EFE9E0] space-y-2.5">
-                <p className="text-xs font-medium text-[#6E6359]">Recent reflections</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {companion.journalEntries.slice(0, 2).map((entry) => (
+              {showPastEntries && (
+                <div className="pt-2 border-t border-[#EFE9E0] dark:border-[#2A2825] space-y-2 max-h-40 overflow-y-auto">
+                  {companion.journalEntries.slice(0, 4).map((entry) => (
                     <div
                       key={entry.id}
-                      className="rounded-2xl bg-[#F8F5F0]/80 border border-[#EAE3D9] p-3.5"
+                      className="rounded-xl bg-[#F8F5F0] dark:bg-[#161616] p-2.5 border border-[#E6DFD5] dark:border-[#2A2825]"
                     >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <p className="text-xs font-semibold text-[#292522] truncate">
-                          {entry.title}
-                        </p>
-                        <span className="font-mono text-[11px] text-[#6E6359] tabular-nums shrink-0">
-                          {entry.date.slice(5)}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-[#5C534D] leading-relaxed line-clamp-2">
+                      <p className="text-[11px] font-semibold text-[#292522] dark:text-[#F3EFEA] truncate">
+                        {entry.title}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-[#6E6359] dark:text-[#9E958C] line-clamp-2">
                         {entry.content}
                       </p>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </motion.section>
+              )}
 
-          {/* Small Daily Challenge Section (5 cols) */}
-          <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.2, ease: EASE_OUT }}
-            aria-label="Daily Mindful Challenge"
-            className="lg:col-span-5 rounded-3xl bg-[#F8F1EE] border border-[#E7D6D2] p-6 sm:p-7 flex flex-col justify-between gap-6 shadow-[0_1px_4px_rgba(128,0,32,0.04)]"
-          >
-            <div>
-              <div className="flex items-center justify-between gap-3">
-                <p className="inline-flex items-center gap-1.5 text-xs font-medium text-[#800020]">
-                  <Compass className="w-3.5 h-3.5 shrink-0" />
-                  <span>Daily Gentle Challenge</span>
-                </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (companion.journalEntries.length === 0) {
+                    setEntryMode('journal');
+                    setTimeout(() => journalTextareaRef.current?.focus(), 0);
+                    return;
+                  }
+                  setShowPastEntries((s) => !s);
+                }}
+                aria-expanded={companion.journalEntries.length > 0 ? showPastEntries : undefined}
+                aria-label={
+                  companion.journalEntries.length === 0
+                    ? 'Write and seal your first journal entry'
+                    : showPastEntries
+                      ? 'Hide saved journal entries'
+                      : `Open ${companion.journalEntries.length} saved journal entries`
+                }
+                className="group block w-full text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#800020] dark:focus-visible:ring-[#D4A85E]"
+              >
+                <CreamEnvelopeArt
+                  isOpen={showPastEntries && companion.journalEntries.length > 0}
+                  label={
+                    companion.journalEntries.length === 0
+                      ? 'Tap to write & seal an entry'
+                      : showPastEntries
+                        ? `Close sealed entries (${companion.journalEntries.length})`
+                        : `Open ${companion.journalEntries.length} sealed ${
+                            companion.journalEntries.length === 1 ? 'entry' : 'entries'
+                          }`
+                  }
+                />
+              </button>
 
+              {!welcomeImgFailed && (
+                <div className="h-20 rounded-xl overflow-hidden border border-[#E6DFD5] dark:border-[#2E2C29]">
+                  <img
+                    src={welcomeBotanicalImg}
+                    alt="Pressed botanical sprig on linen stationery"
+                    referrerPolicy="no-referrer"
+                    onError={() => setWelcomeImgFailed(true)}
+                    className="w-full h-full object-cover dark:brightness-[0.85]"
+                  />
+                </div>
+              )}
+            </section>
+
+            {/* Reminders Checklist (Wired directly to real Reminder notes) */}
+            <section
+              aria-label="Reminders"
+              className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 sm:p-5 space-y-3 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-display text-lg font-medium text-[#292522] dark:text-[#F3EFEA]">
+                  reminders
+                </h2>
                 <button
                   type="button"
-                  onClick={cycleChallenge}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-[#6E6359] bg-[#FFFDF9]/80 border border-[#E7D6D2] hover:text-[#292522] transition-colors whitespace-nowrap"
+                  onClick={() => onNavigate('notes')}
+                  className="text-[11px] font-medium text-[#800020] dark:text-[#D4A85E] hover:underline"
                 >
-                  <RefreshCw className="w-3 h-3" />
-                  <span>Swap</span>
+                  Notes
                 </button>
               </div>
 
-              <h2 className="mt-4 text-2xl font-medium text-[#292522] leading-snug">
-                {todayChallenge.title}
-              </h2>
-
-              <p className="mt-1.5 text-xs font-medium text-[#800020]">
-                {todayChallenge.duration}
-              </p>
-
-              <p className="mt-3 text-sm text-[#4F4740] leading-relaxed">
-                {todayChallenge.description}
-              </p>
-            </div>
-
-            <div className="space-y-4 pt-4 border-t border-[#E7D6D2]">
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.98 }}
-                onClick={handleToggleChallenge}
-                className={`w-full py-3 px-4 rounded-2xl text-sm font-medium flex items-center justify-center gap-2 transition-all duration-150 ${
-                  isChallengeDoneToday
-                    ? 'bg-[#4A6B53] text-[#FFFDF9] hover:bg-[#3B5743]'
-                    : 'bg-[#800020] text-[#FFFDF9] hover:bg-[#66001A] shadow-[0_2px_8px_rgba(128,0,32,0.18)]'
-                }`}
-              >
-                <Check className="w-4 h-4" />
-                <span>
-                  {isChallengeDoneToday ? 'Completed Today' : 'Complete Today’s Challenge'}
-                </span>
-              </motion.button>
-
-              <div className="flex items-center justify-between text-xs text-[#6E6359] tabular-nums">
-                <span>Total mindful challenges completed</span>
-                <span className="font-mono font-semibold text-[#292522]">
-                  {companion.completedChallengeDates.length}
-                </span>
-              </div>
-            </div>
-          </motion.section>
-        </div>
-
-        {/* 9. Weekly Achievements & Reflection Preview */}
-        <motion.section
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.22, ease: EASE_OUT }}
-          aria-label="Weekly Achievements and Reflection"
-          className="rounded-3xl bg-[#FFFDF9] border border-[#E8E1D7] p-6 sm:p-8 shadow-[0_1px_4px_rgba(41,37,34,0.04)]"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-5 border-b border-[#EFE9E0]">
-            <div>
-              <p className="text-xs font-medium text-[#800020]">
-                Weekly Achievements &amp; Reflection
-              </p>
-              <h2 className="mt-1 text-2xl sm:text-[26px] font-medium text-[#292522]">
-                How your week is unfolding
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => onNavigate('weekly')}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium bg-[#F8F5F0] border border-[#E8E1D7] text-[#292522] hover:border-[#A69A8D] transition-colors whitespace-nowrap"
-              >
-                <span>Open Weekly Planner</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-            {/* Achievement Metrics */}
-            <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="rounded-2xl bg-[#F8F5F0]/80 border border-[#EFE9E0] p-4">
-                <p className="text-xs text-[#6E6359]">Weekly Tasks</p>
-                <p className="mt-1.5 font-mono text-2xl font-semibold text-[#800020] tabular-nums">
-                  {weeklyPct}%
-                </p>
-                <p className="mt-1 text-[11px] text-[#6E6359] tabular-nums">
-                  {weeklyCompleted} of {weeklyTotal} done
-                </p>
-              </div>
-
-              <div className="rounded-2xl bg-[#F8F5F0]/80 border border-[#EFE9E0] p-4">
-                <p className="text-xs text-[#6E6359]">Best Streak</p>
-                <p className="mt-1.5 font-mono text-2xl font-semibold text-[#292522] tabular-nums">
-                  {bestStreak}d
-                </p>
-                <p className="mt-1 text-[11px] text-[#6E6359]">
-                  Active habit streak
-                </p>
-              </div>
-
-              <div className="rounded-2xl bg-[#F8F5F0]/80 border border-[#EFE9E0] p-4">
-                <p className="text-xs text-[#6E6359]">Garden Rhythm</p>
-                <p className="mt-1.5 font-mono text-2xl font-semibold text-[#4A6B53] tabular-nums">
-                  {weeklyHabitConsistency}%
-                </p>
-                <p className="mt-1 text-[11px] text-[#6E6359]">
-                  Weekly consistency
-                </p>
-              </div>
-
-              <div className="rounded-2xl bg-[#F8F5F0]/80 border border-[#EFE9E0] p-4">
-                <p className="text-xs text-[#6E6359]">Check-Ins</p>
-                <p className="mt-1.5 font-mono text-2xl font-semibold text-[#292522] tabular-nums">
-                  {journalCheckInsCount}
-                </p>
-                <p className="mt-1 text-[11px] text-[#6E6359]">
-                  Moods &amp; journal notes
-                </p>
-              </div>
-            </div>
-
-            {/* Mon-Sun Habit Consistency Bars + Reflection Note */}
-            <div className="lg:col-span-5 rounded-2xl bg-[#FAF7F2] border border-[#EAE3D9] p-4 sm:p-5 space-y-4">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium text-[#292522]">
-                  Mon – Sun Habit Garden Rhythm
-                </span>
-                <span className="text-[#6E6359] tabular-nums">
-                  {completedHabitCheckIns} blooms this week
-                </span>
-              </div>
-
-              <div className="grid grid-cols-7 gap-2 items-end">
-                {habitByDayRates.map((item) => {
-                  const isTodayCol = item.idx === todayIdx;
-                  return (
-                    <div key={item.day} className="flex flex-col items-center gap-1.5">
-                      <div className="w-full h-14 rounded-lg bg-[#EFE9E0]/80 flex items-end overflow-hidden">
-                        <div
-                          className={`w-full rounded-t-md transition-all duration-300 ${
-                            isTodayCol ? 'bg-[#800020]' : 'bg-[#4A6B53]'
-                          }`}
-                          style={{
-                            height: item.metCount === 0 ? '0%' : `${Math.max(18, item.pct)}%`,
-                          }}
-                        />
-                      </div>
-                      <span
-                        className={`text-[11px] ${
-                          isTodayCol ? 'font-semibold text-[#800020]' : 'text-[#6E6359]'
-                        }`}
+              <div className="space-y-1.5">
+                {reminderNotes.length === 0 ? (
+                  <p className="text-xs text-[#6E6359] dark:text-[#9E958C]">
+                    No reminders yet. Add one below.
+                  </p>
+                ) : (
+                  reminderNotes.slice(0, 5).map((note) => {
+                    const isDone = Boolean(note.completed);
+                    return (
+                      <button
+                        key={note.id}
+                        type="button"
+                        onClick={() => onToggleNoteCompleted?.(note.id)}
+                        className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-xl bg-[#F8F5F0]/75 dark:bg-[#161616] border border-[#EAE3D9] dark:border-[#2A2825] text-left hover:border-[#CBBFB2] dark:hover:border-[#49443E] transition-colors"
                       >
-                        {item.day}
-                      </span>
-                    </div>
-                  );
-                })}
+                        <span
+                          className={`mt-0.5 w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                            isDone
+                              ? 'bg-[#800020] dark:bg-[#C89B54] border-[#800020] dark:border-[#C89B54] text-[#FFFDF9] dark:text-[#141414]'
+                              : 'border-[#CFC5B8] dark:border-[#49443E]'
+                          }`}
+                        >
+                          {isDone && <Check className="w-2.5 h-2.5" />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={`text-xs leading-snug ${
+                              isDone
+                                ? 'line-through text-[#8C8278] dark:text-[#7D766E]'
+                                : 'text-[#292522] dark:text-[#F3EFEA]'
+                            }`}
+                          >
+                            {note.title}
+                          </p>
+                          {note.reminderDate && (
+                            <p className="font-mono text-[10px] text-[#800020] dark:text-[#D4A85E] tabular-nums">
+                              {note.reminderDate}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
               </div>
 
-              <p className="text-xs text-[#5C534D] leading-relaxed">
-                {weeklyPct >= 60 && weeklyHabitConsistency >= 60
-                  ? 'You are balancing meaningful work with steady self-care this week—keep protecting your evening wind-down.'
-                  : 'Small consistent check-ins matter more than perfection. Choose one gentle win before tonight.'}
-              </p>
-            </div>
+              <form onSubmit={handleAddQuickReminder} className="flex items-center gap-1.5 pt-1">
+                <input
+                  type="text"
+                  value={quickReminderTitle}
+                  onChange={(e) => setQuickReminderTitle(e.target.value)}
+                  placeholder="Add reminder..."
+                  aria-label="Quick add reminder"
+                  className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-xs text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+                />
+                <button
+                  type="submit"
+                  disabled={!quickReminderTitle.trim()}
+                  aria-label="Save reminder"
+                  className="p-1.5 rounded-lg bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] disabled:opacity-40"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </form>
+            </section>
+
+            {/* Daily Gentle Challenge + Chic Editorial Quote Card */}
+            <section
+              aria-label="Daily Challenge and Muse Quote"
+              className="space-y-4"
+            >
+              <div className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium text-[#800020] dark:text-[#D4A85E]">
+                    daily challenge · {todayChallenge.duration}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={cycleChallenge}
+                    aria-label="Swap daily challenge"
+                    className="p-1 rounded-md text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA]"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </button>
+                </div>
+                <p className="text-xs font-semibold text-[#292522] dark:text-[#F3EFEA]">
+                  {todayChallenge.title}
+                </p>
+                <p className="text-[11px] text-[#6E6359] dark:text-[#A69E94] leading-relaxed">
+                  {todayChallenge.description}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleToggleChallenge}
+                  className={`w-full py-2 rounded-xl text-xs font-medium transition-colors ${
+                    isChallengeDoneToday
+                      ? 'bg-[#4A6B53] dark:bg-[#4E7559] text-[#FFFDF9]'
+                      : 'bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-[#292522] dark:text-[#F3EFEA] hover:border-[#800020] dark:hover:border-[#D4A85E]'
+                  }`}
+                >
+                  {isChallengeDoneToday ? 'Challenge Completed' : 'Accept & Complete'}
+                </button>
+              </div>
+
+              {/* Iconic High-Contrast Editorial Quote Callout Card */}
+              <div className="rounded-2xl bg-[#FAF6EE] border border-[#E5DDD0] dark:border-[#34312D] p-5 text-center space-y-2">
+                {editingMuseQuote ? (
+                  <form onSubmit={handleSaveMuseQuote} className="space-y-2">
+                    <textarea
+                      rows={2}
+                      value={museQuoteDraft}
+                      onChange={(e) => setMuseQuoteDraft(e.target.value)}
+                      placeholder="Write a personal quote or question..."
+                      aria-label="Edit muse quote"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#D8CFC3] text-xs text-[#292522] text-center focus:outline-none focus:border-[#800020]"
+                      autoFocus
+                    />
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        type="submit"
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#800020] text-white"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingMuseQuote(false)}
+                        className="px-2 py-1 rounded-lg text-[11px] text-[#6E6359]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <BookOpen className="w-4 h-4 mx-auto text-[#800020]" aria-hidden="true" />
+                    <p className="font-display text-base font-semibold uppercase tracking-[0.04em] leading-snug text-[#1D1B19]">
+                      {displayedMuseQuote}
+                    </p>
+                    <div className="flex items-center justify-center gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomQuote('');
+                          setMuseQuoteIdx((i) => i + 1);
+                        }}
+                        className="text-[10px] font-mono uppercase tracking-wider text-[#6E6359] hover:text-[#1D1B19]"
+                      >
+                        next quote
+                      </button>
+                      <span className="text-[#CBBFB2]" aria-hidden="true">·</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMuseQuoteDraft(displayedMuseQuote);
+                          setEditingMuseQuote(true);
+                        }}
+                        className="text-[10px] font-mono uppercase tracking-wider text-[#800020] hover:underline"
+                      >
+                        customize
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </section>
           </div>
-        </motion.section>
+        </div>
       </div>
     </MotionConfig>
   );
