@@ -1,0 +1,6 @@
+{
+  "name": "DayEase",
+  "description": "A calm, practical personal assistant for organizing daily routines, managing tasks, tracking habits, planning affordable meals, and capturing notes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
