@@ -603,8 +603,12 @@ export function Dashboard({
           {/* Overlapping Space Emblem + Editable Space Title + Focus Timer */}
           <div className="px-5 sm:px-8 pb-6">
             <div className="relative -mt-8 mb-3 flex items-end justify-between gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#34312D] shadow-md flex items-center justify-center shrink-0 text-[#800020] dark:text-[#D4A85E]">
-                <Sparkles className="w-7 h-7" aria-hidden="true" />
+              <div className="w-16 h-16 rounded-2xl bg-[#F4F1EC] border border-[#E6DFD5] dark:border-[#C89B54]/45 shadow-md overflow-hidden shrink-0">
+                <img
+                  src="/assets/aistudio/dayease_81fc60c2.png"
+                  alt="DayEase logo"
+                  className="w-full h-full object-cover scale-[1.68]"
+                />
               </div>
 
               <p className="hidden sm:block text-xs text-[#6E6359] dark:text-[#A69E94] tabular-nums pb-1">

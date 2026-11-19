@@ -40,27 +40,18 @@ interface SidebarProps {
   onCycleTheme: () => void;
 }
 
-function BrandMark() {
+function BrandMark({ size = 'md' }: { size?: 'sm' | 'md' }) {
+  const sizeClass = size === 'sm' ? 'w-8 h-8' : 'w-10 h-10';
   return (
-    <svg
-      width="30"
-      height="30"
-      viewBox="0 0 30 30"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-      className="shrink-0"
+    <div
+      className={`${sizeClass} rounded-full overflow-hidden border border-[#E8E1D7] dark:border-[#C89B54]/45 bg-[#F4F1EC] shrink-0 shadow-[0_1px_2px_rgba(41,37,34,0.06)]`}
     >
-      <rect width="30" height="30" rx="9" className="fill-[#800020] dark:fill-[#991B38]" />
-      <circle cx="15" cy="15" r="5.5" stroke="#FFFDF9" strokeWidth="1.75" />
-      <path
-        d="M15 12V15L17.2 16.3"
-        stroke="#FFFDF9"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+      <img
+        src="/assets/aistudio/dayease_81fc60c2.png"
+        alt="DayEase logo"
+        className="w-full h-full object-cover scale-[1.72]"
       />
-    </svg>
+    </div>
   );
 }
 
@@ -111,7 +102,7 @@ export function Sidebar({
           <div className="flex items-center gap-3 px-2 pb-6 border-b border-[#EFE9E0] dark:border-[#262422]">
             <BrandMark />
             <span className="font-display text-2xl font-semibold tracking-tight text-[#292522] dark:text-[#F3EFEA] whitespace-nowrap">
-              My Day
+              DayEase
             </span>
           </div>
 
@@ -207,9 +198,9 @@ export function Sidebar({
       {/* Mobile Header */}
       <header className="lg:hidden sticky top-0 z-30 flex items-center justify-between gap-4 bg-[#FFFDF9]/95 dark:bg-[#181818]/95 backdrop-blur-sm border-b border-[#E8E1D7] dark:border-[#2A2826] px-4 h-14 transition-colors duration-200">
         <div className="flex items-center gap-2.5 min-w-0">
-          <BrandMark />
+          <BrandMark size="sm" />
           <span className="font-display text-xl font-semibold tracking-tight text-[#292522] dark:text-[#F3EFEA] whitespace-nowrap">
-            My Day
+            DayEase
           </span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
