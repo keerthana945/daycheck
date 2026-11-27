@@ -2,10 +2,19 @@ import type { Habit, MyDayState, RoutineItem, Weekday } from '../types';
 
 export const WEEK_DAYS: Weekday[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+export const DEFAULT_FOCUS_CATEGORIES: string[] = [
+  'Study',
+  'Work',
+  'Personal',
+  'Home',
+  'Health',
+  'Creative',
+];
+
 export const MOTIVATIONAL_QUOTES: Array<{ text: string; author: string }> = [
   {
     text: 'Small, unhurried steps repeated every day quietly build the life you want.',
-    author: 'My Day Principle',
+    author: 'DayEase Principle',
   },
   {
     text: 'Clarity comes from deciding what matters today, not from doing everything at once.',
@@ -20,7 +29,7 @@ export const MOTIVATIONAL_QUOTES: Array<{ text: string; author: string }> = [
     author: 'Calm Productivity',
   },
   {
-    text: 'Every page read, every design practiced, and every application sent moves the needle forward.',
+    text: 'Every page read, every skill practiced, and every thoughtful step moves the needle forward.',
     author: 'Steady Progress',
   },
 ];
@@ -35,10 +44,15 @@ export function getTodayWeekday(): Weekday {
   return WEEK_DAYS[getTodayWeekdayIndex()];
 }
 
-export function getDateForWeekday(day: Weekday): string {
+export function getDateForWeekday(day: Weekday, weekOffset = 0): string {
   const todayIdx = getTodayWeekdayIndex();
   const targetIdx = WEEK_DAYS.indexOf(day);
-  return getOffsetDateISO(targetIdx - todayIdx);
+  return getOffsetDateISO(targetIdx - todayIdx + weekOffset * 7);
+}
+
+export function getWeekStartISO(weekOffset = 0): string {
+  const todayIdx = getTodayWeekdayIndex();
+  return getOffsetDateISO(-todayIdx + weekOffset * 7);
 }
 
 export function getTodayDateISO(): string {
@@ -58,6 +72,13 @@ export function getOffsetDateISO(daysFromToday: number): string {
   return `${y}-${m}-${day}`;
 }
 
+export function getCurrentTimeHHMM(): string {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
 export function formatTime12h(time24: string): string {
   if (!time24) return 'Anytime';
   const [hStr, mStr] = time24.split(':');
@@ -69,354 +90,141 @@ export function formatTime12h(time24: string): string {
   return `${h12}:${String(m).padStart(2, '0')} ${period}`;
 }
 
-export function createDefaultRoutine(): RoutineItem[] {
+/** Optional starter routine template — only applied when a user explicitly clicks to load it */
+export function createStarterRoutineTemplate(): RoutineItem[] {
+  const ts = Date.now();
   return [
     {
-      id: 'rt-1',
-      time: '09:00',
-      title: 'Wake up',
+      id: `rt-${ts}-1`,
+      time: '07:30',
+      title: 'Morning hydration & stretch',
       category: 'Morning',
-      completed: true,
-      notes: 'Open curtains, hydrate, and stretch for 5 minutes.',
-    },
-    {
-      id: 'rt-2',
-      time: '09:30',
-      title: 'Breakfast',
-      category: 'Morning',
-      completed: true,
-      notes: 'Balanced breakfast without rushing.',
-    },
-    {
-      id: 'rt-3',
-      time: '10:00',
-      title: 'Study',
-      category: 'Study',
-      completed: true,
-      notes: 'Focused deep learning session.',
-    },
-    {
-      id: 'rt-4',
-      time: '11:00',
-      title: 'Bath and household work',
-      category: 'Home',
       completed: false,
-      notes: 'Freshen up, tidy workspace, and light chores.',
+      notes: 'Open curtains, drink a full glass of water, and take five slow breaths.',
     },
     {
-      id: 'rt-5',
+      id: `rt-${ts}-2`,
+      time: '08:15',
+      title: 'Breakfast & daily intention',
+      category: 'Morning',
+      completed: false,
+      notes: 'Enjoy breakfast unhurriedly and choose one key priority.',
+    },
+    {
+      id: `rt-${ts}-3`,
+      time: '09:30',
+      title: 'Deep focus block',
+      category: 'Study',
+      completed: false,
+      notes: 'Dedicated time for your most important project or learning.',
+    },
+    {
+      id: `rt-${ts}-4`,
       time: '12:30',
-      title: 'Lunch',
+      title: 'Midday pause & lunch',
       category: 'Wellness',
       completed: false,
-      notes: 'Step away from screens during lunch.',
+      notes: 'Step away from screens for a calm meal and fresh air.',
     },
     {
-      id: 'rt-6',
-      time: '13:30',
-      title: 'UX design practice',
-      category: 'Study',
-      completed: false,
-      notes: 'Wireframing, case study polish, or component audit.',
-    },
-    {
-      id: 'rt-7',
-      time: '15:00',
-      title: 'English practice',
-      category: 'Study',
-      completed: false,
-      notes: 'Speaking, vocabulary notes, or listening exercise.',
-    },
-    {
-      id: 'rt-8',
-      time: '16:00',
-      title: 'Job searching and applications',
+      id: `rt-${ts}-5`,
+      time: '14:00',
+      title: 'Afternoon momentum block',
       category: 'Career',
       completed: false,
-      notes: 'Tailor resume, apply to target roles, and follow up.',
+      notes: 'Tackle smaller tasks, replies, or collaborative work.',
     },
     {
-      id: 'rt-9',
-      time: '17:00',
-      title: 'Hobbies',
-      category: 'Wellness',
+      id: `rt-${ts}-6`,
+      time: '17:30',
+      title: 'Movement & workspace reset',
+      category: 'Home',
       completed: false,
-      notes: 'Sketching, music, walk outdoors, or creative play.',
+      notes: 'A short walk, workout, or tidying your desk before evening.',
     },
     {
-      id: 'rt-10',
-      time: '19:00',
-      title: 'Dinner',
-      category: 'Wellness',
-      completed: false,
-      notes: 'Warm dinner and unwind.',
-    },
-    {
-      id: 'rt-11',
-      time: '20:00',
-      title: 'Revision and tomorrow planning',
+      id: `rt-${ts}-7`,
+      time: '21:00',
+      title: 'Evening reflection & wind-down',
       category: 'Evening',
       completed: false,
-      notes: 'Review study notes and pick top 3 priorities for tomorrow.',
-    },
-    {
-      id: 'rt-12',
-      time: '22:30',
-      title: 'Sleep',
-      category: 'Evening',
-      completed: false,
-      notes: 'Screens off by 10:15 PM for restful sleep.',
+      notes: 'Jot down one win from today and dim lights for restful sleep.',
     },
   ];
 }
 
-function buildInitialWeeklyHistory(
-  pattern: boolean[],
-): [boolean, boolean, boolean, boolean, boolean, boolean, boolean] {
-  const todayIdx = getTodayWeekdayIndex();
-  return [0, 1, 2, 3, 4, 5, 6].map((idx) => (idx <= todayIdx ? pattern[idx] : false)) as [
-    boolean,
-    boolean,
-    boolean,
-    boolean,
-    boolean,
-    boolean,
-    boolean,
+/** Optional starter habits template — zero pre-filled fake history; only added if user chooses */
+export function createStarterHabitsTemplate(): Habit[] {
+  const emptyWeek: [boolean, boolean, boolean, boolean, boolean, boolean, boolean] = [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
   ];
-}
-
-export function createInitialHabits(): Habit[] {
-  const todayIdx = getTodayWeekdayIndex();
-
-  const water = buildInitialWeeklyHistory([true, true, true, true, false, true, true]);
-  water[todayIdx] = false;
-
-  const exercise = buildInitialWeeklyHistory([true, false, true, true, true, false, true]);
-  exercise[todayIdx] = true;
-
-  const studying = buildInitialWeeklyHistory([true, true, true, true, true, true, true]);
-  studying[todayIdx] = true;
-
-  const reading = buildInitialWeeklyHistory([true, true, false, true, true, true, false]);
-  reading[todayIdx] = false;
-
-  const english = buildInitialWeeklyHistory([true, true, true, false, true, true, true]);
-  english[todayIdx] = false;
-
   return [
     {
       key: 'water',
       name: 'Water',
       unit: 'glasses',
       step: 1,
-      todayValue: 5,
+      todayValue: 0,
       targetValue: 8,
       minTarget: 4,
       maxTarget: 14,
-      weeklyHistory: water,
+      plantStyle: 'fern',
+      weeklyHistory: [...emptyWeek],
     },
     {
       key: 'exercise',
-      name: 'Exercise',
+      name: 'Movement',
       unit: 'min',
       step: 10,
-      todayValue: 30,
+      todayValue: 0,
       targetValue: 30,
       minTarget: 15,
       maxTarget: 90,
-      weeklyHistory: exercise,
+      plantStyle: 'olive',
+      weeklyHistory: [...emptyWeek],
     },
     {
       key: 'studying',
-      name: 'Studying',
+      name: 'Deep Focus',
       unit: 'min',
       step: 15,
-      todayValue: 60,
-      targetValue: 60,
-      minTarget: 20,
+      todayValue: 0,
+      targetValue: 45,
+      minTarget: 15,
       maxTarget: 180,
-      weeklyHistory: studying,
+      plantStyle: 'camellia',
+      weeklyHistory: [...emptyWeek],
     },
     {
       key: 'reading',
       name: 'Reading',
       unit: 'pages',
       step: 5,
-      todayValue: 10,
-      targetValue: 20,
+      todayValue: 0,
+      targetValue: 15,
       minTarget: 5,
       maxTarget: 60,
-      weeklyHistory: reading,
-    },
-    {
-      key: 'english',
-      name: 'English Practice',
-      unit: 'min',
-      step: 10,
-      todayValue: 20,
-      targetValue: 30,
-      minTarget: 10,
-      maxTarget: 90,
-      weeklyHistory: english,
+      plantStyle: 'peony',
+      weeklyHistory: [...emptyWeek],
     },
   ];
 }
 
+/** Clean, completely empty workspace for every new visitor */
 export function createInitialMyDayState(): MyDayState {
-  const today = getTodayWeekday();
-  const nextDay = WEEK_DAYS[(getTodayWeekdayIndex() + 1) % 7];
-  const prevDay = WEEK_DAYS[(getTodayWeekdayIndex() + 6) % 7];
-  const plus2Day = WEEK_DAYS[(getTodayWeekdayIndex() + 2) % 7];
-  const plus3Day = WEEK_DAYS[(getTodayWeekdayIndex() + 3) % 7];
-
   return {
-    tasks: [
-      {
-        id: 'td-1',
-        title: 'Complete Figma component library spacing audit',
-        time: '13:30',
-        deadline: getTodayDateISO(),
-        priority: 'High',
-        category: 'UX Design',
-        day: today,
-        completed: false,
-        notes: 'Verify 8px grid alignment across mobile cards and buttons.',
-      },
-      {
-        id: 'td-2',
-        title: 'Read 15 minutes of English article & note 5 phrases',
-        time: '15:00',
-        deadline: getTodayDateISO(),
-        priority: 'Medium',
-        category: 'Study',
-        day: today,
-        completed: false,
-      },
-      {
-        id: 'td-3',
-        title: 'Submit 2 tailored UX Designer job applications',
-        time: '16:00',
-        deadline: getTodayDateISO(),
-        priority: 'High',
-        category: 'Career',
-        day: today,
-        completed: false,
-        notes: 'Attach updated portfolio PDF and short cover note.',
-      },
-      {
-        id: 'td-4',
-        title: 'Morning study notes & flashcard review',
-        time: '10:00',
-        deadline: getTodayDateISO(),
-        priority: 'Medium',
-        category: 'Study',
-        day: today,
-        completed: true,
-      },
-      {
-        id: 'td-5',
-        title: 'Organize desk & laundry fold',
-        time: '11:15',
-        deadline: getTodayDateISO(),
-        priority: 'Low',
-        category: 'Home',
-        day: today,
-        completed: true,
-      },
-      {
-        id: 'td-6',
-        title: 'Finalize case study hero mockups',
-        time: '14:00',
-        deadline: getDateForWeekday(nextDay),
-        priority: 'High',
-        category: 'UX Design',
-        day: nextDay,
-        completed: false,
-      },
-      {
-        id: 'td-7',
-        title: 'Practice 20-min English mock interview responses',
-        time: '15:00',
-        deadline: getDateForWeekday(nextDay),
-        priority: 'Medium',
-        category: 'Career',
-        day: nextDay,
-        completed: false,
-      },
-      {
-        id: 'td-8',
-        title: 'Grocery restock & meal prep basics',
-        time: '17:30',
-        deadline: getDateForWeekday(plus2Day),
-        priority: 'Medium',
-        category: 'Personal',
-        day: plus2Day,
-        completed: false,
-      },
-      {
-        id: 'td-9',
-        title: 'Weekly portfolio LinkedIn post draft',
-        time: '16:00',
-        deadline: getDateForWeekday(plus3Day),
-        priority: 'Low',
-        category: 'Career',
-        day: plus3Day,
-        completed: false,
-      },
-      {
-        id: 'td-10',
-        title: 'Review design systems typography chapter',
-        time: '10:00',
-        deadline: getDateForWeekday(prevDay),
-        priority: 'Medium',
-        category: 'Study',
-        day: prevDay,
-        completed: true,
-      },
-    ],
-    routine: createDefaultRoutine(),
-    habits: createInitialHabits(),
-    notes: [
-      {
-        id: 'nt-1',
-        title: 'UX Portfolio Interview Talking Points',
-        content:
-          'Explain problem framing first, show before/after user flow simplification, and share measurable task completion improvements.',
-        category: 'Career',
-        updatedAt: getTodayDateISO(),
-      },
-      {
-        id: 'nt-critique',
-        title: 'Daily Planner UX Critique Notes',
-        content:
-          'Keep primary actions reachable in one click, avoid deep nested modals for quick tasks, and ensure comfortable contrast on warm neutral surfaces.',
-        category: 'Critique',
-        updatedAt: getTodayDateISO(),
-      },
-      {
-        id: 'nt-2',
-        title: 'English Speaking Practice Phrases',
-        content:
-          'Practice transition phrases: "To put that in context...", "What stood out during testing was...", "My main takeaway is...".',
-        category: 'Study',
-        updatedAt: getOffsetDateISO(-1),
-      },
-      {
-        id: 'nt-3',
-        title: 'Follow up with recruiter at Studio North',
-        content: 'Send a polite check-in email regarding the product design application submitted last week.',
-        category: 'Reminder',
-        reminderDate: getOffsetDateISO(1),
-        completed: false,
-        updatedAt: getTodayDateISO(),
-      },
-      {
-        id: 'nt-4',
-        title: 'Evening Wind-Down Checklist',
-        content: 'Refill water bottle, pack tomorrow study notes, and turn on sleep focus mode at 10:15 PM.',
-        category: 'Personal',
-        updatedAt: getOffsetDateISO(-2),
-      },
-    ],
+    tasks: [],
+    routine: [],
+    habits: [],
+    notes: [],
+    customCategories: [],
+    lastOpenedDate: getTodayDateISO(),
+    lastOpenedWeekStart: getWeekStartISO(0),
   };
 }

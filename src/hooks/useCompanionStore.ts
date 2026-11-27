@@ -1,12 +1,19 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { getTodayDateISO } from '../data/sampleData';
-import type { JournalEntry, MoodEntry, MoodKey } from '../types';
+import type {
+  EveningReflectionRecord,
+  FocusSession,
+  JournalEntry,
+  MoodEntry,
+  MoodKey,
+  MorningResetRecord,
+} from '../types';
 
-const COMPANION_STORAGE_KEY = 'myday_companion_v1';
+export const COMPANION_STORAGE_KEY = 'myday_companion_v1';
 
 export type BannerMood = 'skyline' | 'espresso' | 'burgundy';
 
-interface CompanionState {
+export interface CompanionState {
   preferredName: string;
   mantra: string;
   mindDumpText: string;
@@ -18,6 +25,9 @@ interface CompanionState {
   journalDraftContent: string;
   completedChallengeDates: string[];
   challengeOffset: number;
+  focusSessions: FocusSession[];
+  morningResets: Record<string, MorningResetRecord>;
+  eveningReflections: Record<string, EveningReflectionRecord>;
 }
 
 const DEFAULT_COMPANION_STATE: CompanionState = {
@@ -27,62 +37,58 @@ const DEFAULT_COMPANION_STATE: CompanionState = {
   bannerMood: 'skyline',
   customQuote: '',
   moods: {},
-  journalEntries: [
-    {
-      id: 'jr-welcome',
-      date: getTodayDateISO(),
-      prompt: 'What deserves your gentle, unhurried focus today?',
-      title: 'A quiet start to the morning',
-      content:
-        'Taking ten calm minutes before opening messages helps set the tone for the rest of the day. Focusing on steady progress over rushing.',
-      createdAt: new Date().toISOString(),
-    },
-  ],
+  journalEntries: [],
   journalDraftTitle: '',
   journalDraftContent: '',
   completedChallengeDates: [],
   challengeOffset: 0,
+  focusSessions: [],
+  morningResets: {},
+  eveningReflections: {},
 };
+
+function sanitizeCompanionState(parsed: Partial<CompanionState>): CompanionState {
+  const validMood =
+    parsed.bannerMood === 'skyline' ||
+    parsed.bannerMood === 'espresso' ||
+    parsed.bannerMood === 'burgundy'
+      ? parsed.bannerMood
+      : 'skyline';
+
+  return {
+    preferredName: typeof parsed.preferredName === 'string' ? parsed.preferredName : '',
+    mantra:
+      typeof parsed.mantra === 'string' && parsed.mantra.trim() ? parsed.mantra : 'main character',
+    mindDumpText: typeof parsed.mindDumpText === 'string' ? parsed.mindDumpText : '',
+    bannerMood: validMood,
+    customQuote: typeof parsed.customQuote === 'string' ? parsed.customQuote : '',
+    moods: parsed.moods && typeof parsed.moods === 'object' ? parsed.moods : {},
+    journalEntries: Array.isArray(parsed.journalEntries)
+      ? parsed.journalEntries
+      : DEFAULT_COMPANION_STATE.journalEntries,
+    journalDraftTitle:
+      typeof parsed.journalDraftTitle === 'string' ? parsed.journalDraftTitle : '',
+    journalDraftContent:
+      typeof parsed.journalDraftContent === 'string' ? parsed.journalDraftContent : '',
+    completedChallengeDates: Array.isArray(parsed.completedChallengeDates)
+      ? parsed.completedChallengeDates
+      : [],
+    challengeOffset: typeof parsed.challengeOffset === 'number' ? parsed.challengeOffset : 0,
+    focusSessions: Array.isArray(parsed.focusSessions) ? parsed.focusSessions : [],
+    morningResets:
+      parsed.morningResets && typeof parsed.morningResets === 'object' ? parsed.morningResets : {},
+    eveningReflections:
+      parsed.eveningReflections && typeof parsed.eveningReflections === 'object'
+        ? parsed.eveningReflections
+        : {},
+  };
+}
 
 function loadCompanionState(): CompanionState {
   try {
     const raw = localStorage.getItem(COMPANION_STORAGE_KEY);
     if (!raw) return DEFAULT_COMPANION_STATE;
-    const parsed = JSON.parse(raw) as Partial<CompanionState>;
-    const validMood =
-      parsed.bannerMood === 'skyline' ||
-      parsed.bannerMood === 'espresso' ||
-      parsed.bannerMood === 'burgundy'
-        ? parsed.bannerMood
-        : 'skyline';
-
-    return {
-      preferredName:
-        typeof parsed.preferredName === 'string' ? parsed.preferredName : '',
-      mantra:
-        typeof parsed.mantra === 'string' && parsed.mantra.trim()
-          ? parsed.mantra
-          : 'main character',
-      mindDumpText:
-        typeof parsed.mindDumpText === 'string' ? parsed.mindDumpText : '',
-      bannerMood: validMood,
-      customQuote:
-        typeof parsed.customQuote === 'string' ? parsed.customQuote : '',
-      moods:
-        parsed.moods && typeof parsed.moods === 'object' ? parsed.moods : {},
-      journalEntries: Array.isArray(parsed.journalEntries)
-        ? parsed.journalEntries
-        : DEFAULT_COMPANION_STATE.journalEntries,
-      journalDraftTitle:
-        typeof parsed.journalDraftTitle === 'string' ? parsed.journalDraftTitle : '',
-      journalDraftContent:
-        typeof parsed.journalDraftContent === 'string' ? parsed.journalDraftContent : '',
-      completedChallengeDates: Array.isArray(parsed.completedChallengeDates)
-        ? parsed.completedChallengeDates
-        : [],
-      challengeOffset:
-        typeof parsed.challengeOffset === 'number' ? parsed.challengeOffset : 0,
-    };
+    return sanitizeCompanionState(JSON.parse(raw) as Partial<CompanionState>);
   } catch {
     return DEFAULT_COMPANION_STATE;
   }
@@ -201,6 +207,13 @@ function useCompanionStoreValue() {
     [],
   );
 
+  const deleteJournalEntry = useCallback((id: string) => {
+    setCompanion((prev) => ({
+      ...prev,
+      journalEntries: prev.journalEntries.filter((e) => e.id !== id),
+    }));
+  }, []);
+
   const toggleTodayChallenge = useCallback(() => {
     const today = getTodayDateISO();
     const nextCompleted = !companion.completedChallengeDates.includes(today);
@@ -223,6 +236,105 @@ function useCompanionStoreValue() {
     }));
   }, []);
 
+  const logFocusSession = useCallback(
+    (input: { minutes: number; taskId?: string; taskTitle?: string }) => {
+      if (input.minutes <= 0) return;
+      const session: FocusSession = {
+        id: `fs-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        date: getTodayDateISO(),
+        minutes: Math.round(input.minutes),
+        taskId: input.taskId,
+        taskTitle: input.taskTitle,
+        completedAt: new Date().toISOString(),
+      };
+      setCompanion((prev) => ({
+        ...prev,
+        focusSessions: [session, ...prev.focusSessions].slice(0, 120),
+      }));
+    },
+    [],
+  );
+
+  const saveMorningReset = useCallback(
+    (input: { intention: string; rolledOverCount: number }) => {
+      const today = getTodayDateISO();
+      const record: MorningResetRecord = {
+        date: today,
+        intention: input.intention.trim(),
+        rolledOverCount: input.rolledOverCount,
+        completedAt: new Date().toISOString(),
+      };
+      setCompanion((prev) => ({
+        ...prev,
+        morningResets: {
+          ...prev.morningResets,
+          [today]: record,
+        },
+      }));
+    },
+    [],
+  );
+
+  const saveEveningReflection = useCallback(
+    (input: { highlight: string; gratitude: string }) => {
+      const today = getTodayDateISO();
+      const highlight = input.highlight.trim();
+      const gratitude = input.gratitude.trim();
+      const record: EveningReflectionRecord = {
+        date: today,
+        highlight,
+        gratitude,
+        completedAt: new Date().toISOString(),
+      };
+
+      const journalContentParts = [
+        highlight ? `Today’s win: ${highlight}` : '',
+        gratitude ? `Grateful for: ${gratitude}` : '',
+      ].filter(Boolean);
+
+      setCompanion((prev) => {
+        const nextEntries =
+          journalContentParts.length > 0
+            ? [
+                {
+                  id: `jr-eve-${Date.now()}`,
+                  date: today,
+                  prompt: 'Evening Reflection',
+                  title: `Evening Wind-Down · ${today}`,
+                  content: journalContentParts.join('\n\n'),
+                  createdAt: new Date().toISOString(),
+                },
+                ...prev.journalEntries,
+              ]
+            : prev.journalEntries;
+
+        return {
+          ...prev,
+          eveningReflections: {
+            ...prev.eveningReflections,
+            [today]: record,
+          },
+          journalEntries: nextEntries,
+        };
+      });
+    },
+    [],
+  );
+
+  const replaceCompanionState = useCallback((next: Partial<CompanionState>) => {
+    setCompanion(sanitizeCompanionState(next));
+  }, []);
+
+  const clearCompanionWorkspace = useCallback(() => {
+    setCompanion((prev) => ({
+      ...DEFAULT_COMPANION_STATE,
+      preferredName: prev.preferredName,
+      bannerMood: prev.bannerMood,
+      mantra: prev.mantra,
+      customQuote: prev.customQuote,
+    }));
+  }, []);
+
   return {
     companion,
     setPreferredName,
@@ -234,8 +346,14 @@ function useCompanionStoreValue() {
     setMoodNoteForToday,
     setJournalDraft,
     saveJournalEntry,
+    deleteJournalEntry,
     toggleTodayChallenge,
     cycleChallenge,
+    logFocusSession,
+    saveMorningReset,
+    saveEveningReflection,
+    replaceCompanionState,
+    clearCompanionWorkspace,
   };
 }
 

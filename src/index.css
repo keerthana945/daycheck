@@ -13,6 +13,7 @@
     background-color: #F8F5F0;
     color: #292522;
     color-scheme: light;
+    overflow-x: clip;
   }
 
   html.dark {
@@ -21,8 +22,13 @@
     color-scheme: dark;
   }
 
+  body {
+    overflow-x: clip;
+  }
+
   h1, h2 {
     font-family: var(--font-display);
+    text-wrap: balance;
   }
 }
 

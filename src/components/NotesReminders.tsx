@@ -1,7 +1,19 @@
 import { useMemo, useState } from 'react';
-import { Plus, Search, Pencil, Trash2, Check, X, StickyNote } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Pencil,
+  Trash2,
+  Check,
+  X,
+  StickyNote,
+  Pin,
+  Clock,
+} from 'lucide-react';
+import { getOffsetDateISO, getTodayDateISO } from '../data/sampleData';
 import { useCompanionStore } from '../hooks/useCompanionStore';
 import { PageCoverHeader } from './EditorialCovers';
+import { ModalShell } from './ModalShell';
 import type { Note, NoteCategory } from '../types';
 
 interface NotesRemindersProps {
@@ -9,6 +21,7 @@ interface NotesRemindersProps {
   onAddNote: (input: Omit<Note, 'id' | 'updatedAt'>) => void;
   onUpdateNote: (id: string, updates: Partial<Omit<Note, 'id'>>) => void;
   onToggleNoteCompleted: (id: string) => void;
+  onToggleNotePinned: (id: string) => void;
   onDeleteNote: (id: string) => void;
 }
 
@@ -27,9 +40,13 @@ export function NotesReminders({
   onAddNote,
   onUpdateNote,
   onToggleNoteCompleted,
+  onToggleNotePinned,
   onDeleteNote,
 }: NotesRemindersProps) {
   const { companion } = useCompanionStore();
+  const todayISO = getTodayDateISO();
+  const tomorrowISO = getOffsetDateISO(1);
+
   const [categoryFilter, setCategoryFilter] = useState<'All' | NoteCategory>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -48,14 +65,19 @@ export function NotesReminders({
 
   const filteredNotes = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return notes.filter((note) => {
-      if (categoryFilter !== 'All' && note.category !== categoryFilter) return false;
-      if (q) {
-        const hay = `${note.title} ${note.content} ${note.category}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
+    return [...notes]
+      .filter((note) => {
+        if (categoryFilter !== 'All' && note.category !== categoryFilter) return false;
+        if (q) {
+          const hay = `${note.title} ${note.content} ${note.category}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
+        return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+      });
   }, [notes, categoryFilter, searchQuery]);
 
   const handleQuickSave = (e: React.FormEvent) => {
@@ -65,6 +87,7 @@ export function NotesReminders({
       title: quickTitle.trim(),
       content: quickTitle.trim(),
       category: quickCat,
+      reminderDate: quickCat === 'Reminder' ? todayISO : undefined,
       completed: false,
     });
     setQuickTitle('');
@@ -74,8 +97,8 @@ export function NotesReminders({
     setEditingNote(null);
     setTitle('');
     setContent('');
-    setCategory('Personal');
-    setReminderDate('');
+    setCategory(categoryFilter === 'All' ? 'Personal' : categoryFilter);
+    setReminderDate(categoryFilter === 'Reminder' ? todayISO : '');
     setFormError('');
     setModalOpen(true);
   };
@@ -107,6 +130,7 @@ export function NotesReminders({
       category,
       reminderDate: reminderDate || undefined,
       completed: editingNote?.completed ?? false,
+      pinned: editingNote?.pinned ?? false,
     };
 
     if (editingNote) {
@@ -121,9 +145,10 @@ export function NotesReminders({
     <div className="space-y-6">
       <PageCoverHeader
         mood={companion.bannerMood}
+        variant="notes"
         eyebrow="reflections & archives"
         title="notes & reminders"
-        subtitle="Capture journal entries, study notes, UX critique notes, career ideas, and checklists in one editorial archive."
+        subtitle="Capture personal reflections, study takeaways, ideas, and date-based reminders in one calm archive."
         icon={<StickyNote className="w-6 h-6" />}
         actions={
           <button
@@ -132,7 +157,7 @@ export function NotesReminders({
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] transition-colors whitespace-nowrap shrink-0"
           >
             <Plus className="w-4 h-4" />
-            <span>Detailed Note</span>
+            <span>New Detailed Note</span>
           </button>
         }
       />
@@ -146,30 +171,32 @@ export function NotesReminders({
           type="text"
           value={quickTitle}
           onChange={(e) => setQuickTitle(e.target.value)}
-          placeholder="Write a quick note, critique, or reminder..."
+          placeholder="Write a quick note, reflection, or reminder..."
           aria-label="Quick note"
-          className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-sm text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+          className="flex-1 min-h-[42px] px-3.5 py-2 rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-sm text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
         />
-        <select
-          value={quickCat}
-          onChange={(e) => setQuickCat(e.target.value as NoteCategory)}
-          aria-label="Quick note category"
-          className="px-3 py-2.5 rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-xs text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
-        >
-          {NOTE_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <button
-          type="submit"
-          disabled={!quickTitle.trim()}
-          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] disabled:opacity-40 transition-colors whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Save</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <select
+            value={quickCat}
+            onChange={(e) => setQuickCat(e.target.value as NoteCategory)}
+            aria-label="Quick note category"
+            className="flex-1 sm:flex-none min-h-[42px] px-3 py-2 rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-xs text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+          >
+            {NOTE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            disabled={!quickTitle.trim()}
+            className="min-h-[42px] inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] disabled:opacity-40 transition-colors whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Save</span>
+          </button>
+        </div>
       </form>
 
       {/* Filter & Search */}
@@ -216,16 +243,30 @@ export function NotesReminders({
 
       {/* Notes Grid */}
       {filteredNotes.length === 0 ? (
-        <div className="rounded-2xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] px-6 py-12 text-center space-y-3 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none">
-          <div className="w-11 h-11 rounded-2xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] mx-auto flex items-center justify-center text-[#800020] dark:text-[#D4A85E]">
+        <div className="rounded-3xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] px-6 py-12 text-center space-y-3 shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none">
+          <div className="w-12 h-12 rounded-2xl bg-[#FAF3F1] dark:bg-[#262320] border border-[#EAD9D8] dark:border-[#493E33] mx-auto flex items-center justify-center text-[#800020] dark:text-[#D4A85E]">
             <StickyNote className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-medium text-[#292522] dark:text-[#F3EFEA]">No notes found</h2>
-            <p className="mt-1 text-sm text-[#6E6359] dark:text-[#A69E94]">
-              Type a note above or click Detailed Note to add a reminder date.
+            <h2 className="font-display text-xl font-medium text-[#292522] dark:text-[#F3EFEA]">
+              {notes.length === 0 ? 'Your quiet notebook is empty' : 'No matching notes'}
+            </h2>
+            <p className="mt-1.5 text-sm text-[#6E6359] dark:text-[#A69E94] max-w-md mx-auto">
+              {notes.length === 0
+                ? 'Capture quick thoughts above or click New Detailed Note to save study notes, reflections, and dated reminders.'
+                : 'Try clearing your search or switching note categories.'}
             </p>
           </div>
+          {notes.length === 0 && (
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414]"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Write First Note</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -233,6 +274,8 @@ export function NotesReminders({
             const isReminder = note.category === 'Reminder' || Boolean(note.reminderDate);
             const isDone = Boolean(note.completed);
             const isCritique = note.category === 'Critique';
+            const isOverdue =
+              isReminder && !isDone && Boolean(note.reminderDate) && note.reminderDate! < todayISO;
 
             return (
               <article
@@ -240,9 +283,11 @@ export function NotesReminders({
                 className={`rounded-2xl border p-5 sm:p-6 flex flex-col justify-between gap-3 transition-all duration-150 ${
                   isReminder && isDone
                     ? 'bg-[#FFFDF9]/70 dark:bg-[#1E1E1E]/60 border-[#EAE3D9] dark:border-[#262422]'
-                    : isCritique
-                      ? 'bg-[#FAF6EE] dark:bg-[#24201C] border-[#E5DDD0] dark:border-[#3D352B] shadow-[0_1px_3px_rgba(128,0,32,0.04)] dark:shadow-none hover:border-[#C89B54]/60'
-                      : 'bg-[#FFFDF9] dark:bg-[#1E1E1E] border-[#E6DFD5] dark:border-[#2E2C29] shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none hover:border-[#CBBFB2] dark:hover:border-[#4A4640]'
+                    : note.pinned
+                      ? 'bg-[#FAF6EE] dark:bg-[#23201B] border-[#D4A85E]/65 dark:border-[#C89B54]/45 shadow-[0_2px_8px_rgba(128,0,32,0.05)] dark:shadow-none'
+                      : isCritique
+                        ? 'bg-[#FAF6EE] dark:bg-[#24201C] border-[#E5DDD0] dark:border-[#3D352B]'
+                        : 'bg-[#FFFDF9] dark:bg-[#1E1E1E] border-[#E6DFD5] dark:border-[#2E2C29] shadow-[0_1px_3px_rgba(41,37,34,0.04)] dark:shadow-none hover:border-[#CBBFB2] dark:hover:border-[#4A4640]'
                 }`}
               >
                 <div>
@@ -281,8 +326,18 @@ export function NotesReminders({
                           {note.reminderDate && (
                             <>
                               <span aria-hidden="true" className="text-[#A69A8D] dark:text-[#5C5650]"> · </span>
-                              <span className="font-mono tabular-nums text-[#800020] dark:text-[#D4A85E]">
-                                Due {note.reminderDate}
+                              <span
+                                className={`font-mono tabular-nums ${
+                                  isOverdue
+                                    ? 'text-[#800020] dark:text-[#E58A9B] font-semibold'
+                                    : 'text-[#800020] dark:text-[#D4A85E]'
+                                }`}
+                              >
+                                {isOverdue
+                                  ? `Overdue (${note.reminderDate})`
+                                  : note.reminderDate === todayISO
+                                    ? 'Due Today'
+                                    : `Due ${note.reminderDate}`}
                               </span>
                             </>
                           )}
@@ -290,7 +345,20 @@ export function NotesReminders({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onToggleNotePinned(note.id)}
+                        aria-label={note.pinned ? `Unpin "${note.title}"` : `Pin "${note.title}"`}
+                        title={note.pinned ? 'Unpin note' : 'Pin note to top'}
+                        className={`p-2 rounded-lg transition-colors ${
+                          note.pinned
+                            ? 'text-[#B5853B] dark:text-[#D4A85E] bg-[#F4EFE7] dark:bg-[#2E271E]'
+                            : 'text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA] hover:bg-[#F8F5F0] dark:hover:bg-[#262523]'
+                        }`}
+                      >
+                        <Pin className="w-4 h-4" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => openEditModal(note)}
@@ -320,6 +388,23 @@ export function NotesReminders({
                     </p>
                   )}
                 </div>
+
+                {isReminder && !isDone && (
+                  <div className="pt-2 border-t border-[#EFE9E0] dark:border-[#262422] flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateNote(note.id, {
+                          reminderDate: tomorrowISO,
+                        })
+                      }
+                      className="inline-flex items-center gap-1 text-xs font-medium text-[#6E6359] dark:text-[#A69E94] hover:text-[#800020] dark:hover:text-[#D4A85E]"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Snooze to tomorrow</span>
+                    </button>
+                  </div>
+                )}
               </article>
             );
           })}
@@ -327,117 +412,100 @@ export function NotesReminders({
       )}
 
       {/* Detailed Modal */}
-      {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#292522]/35 dark:bg-black/65 backdrop-blur-[2px] px-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="note-modal-title"
-        >
-          <div className="w-full max-w-lg rounded-3xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-6 shadow-xl">
-            <div className="flex items-center justify-between gap-4">
-              <h2 id="note-modal-title" className="text-xl font-medium text-[#292522] dark:text-[#F3EFEA]">
-                {editingNote ? 'Edit Note' : 'New Note or Reminder'}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                aria-label="Close modal"
-                className="p-1.5 rounded-lg text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA] hover:bg-[#F8F5F0] dark:hover:bg-[#262523] transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSave} className="mt-4 space-y-4">
-              <div>
-                <label htmlFor="note-title" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
-                  Title
-                </label>
-                <input
-                  id="note-title"
-                  type="text"
-                  value={title}
-                  onChange={(e) => {
-                    setTitle(e.target.value);
-                    if (formError) setFormError('');
-                  }}
-                  placeholder="e.g., UX Critique notes or Follow-up reminder"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
-                  autoFocus
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="note-category" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
-                    Category
-                  </label>
-                  <select
-                    id="note-category"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as NoteCategory)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
-                  >
-                    {NOTE_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="note-reminder" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
-                    Reminder Date (optional)
-                  </label>
-                  <input
-                    id="note-reminder"
-                    type="date"
-                    value={reminderDate}
-                    onChange={(e) => setReminderDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm font-mono text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="note-content" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
-                  Details
-                </label>
-                <textarea
-                  id="note-content"
-                  rows={4}
-                  value={content}
-                  onChange={(e) => {
-                    setContent(e.target.value);
-                    if (formError) setFormError('');
-                  }}
-                  placeholder="Write your note, critique, or reminder details..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
-                />
-              </div>
-
-              {formError && <p className="text-xs text-[#800020] dark:text-[#E58A9B]">{formError}</p>}
-
-              <div className="pt-2 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-sm font-medium border border-[#E6DFD5] dark:border-[#2E2C29] text-[#292522] dark:text-[#F3EFEA] hover:bg-[#F8F5F0] dark:hover:bg-[#262523] transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl text-sm font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] transition-colors"
-                >
-                  {editingNote ? 'Save Changes' : 'Save Note'}
-                </button>
-              </div>
-            </form>
+      <ModalShell
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingNote ? 'Edit Note' : 'New Note or Reminder'}
+        titleId="note-modal-title"
+        maxWidthClass="max-w-lg"
+      >
+        <form onSubmit={handleSave} className="mt-4 space-y-4">
+          <div>
+            <label htmlFor="note-title" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
+              Title
+            </label>
+            <input
+              id="note-title"
+              type="text"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (formError) setFormError('');
+              }}
+              placeholder="e.g., Book notes or Follow-up reminder"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+              autoFocus
+            />
           </div>
-        </div>
-      )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="note-category" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
+                Category
+              </label>
+              <select
+                id="note-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as NoteCategory)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+              >
+                {NOTE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="note-reminder" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
+                Reminder Date (optional)
+              </label>
+              <input
+                id="note-reminder"
+                type="date"
+                value={reminderDate}
+                onChange={(e) => setReminderDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm font-mono text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="note-content" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
+              Details
+            </label>
+            <textarea
+              id="note-content"
+              rows={4}
+              value={content}
+              onChange={(e) => {
+                setContent(e.target.value);
+                if (formError) setFormError('');
+              }}
+              placeholder="Write your note, reflection, or reminder details..."
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+            />
+          </div>
+
+          {formError && <p className="text-xs text-[#800020] dark:text-[#E58A9B]">{formError}</p>}
+
+          <div className="pt-2 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setModalOpen(false)}
+              className="px-4 py-2 rounded-xl text-sm font-medium border border-[#E6DFD5] dark:border-[#2E2C29] text-[#292522] dark:text-[#F3EFEA] hover:bg-[#F8F5F0] dark:hover:bg-[#262523] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-xl text-sm font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] transition-colors"
+            >
+              {editingNote ? 'Save Changes' : 'Save Note'}
+            </button>
+          </div>
+        </form>
+      </ModalShell>
     </div>
   );
 }

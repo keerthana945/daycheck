@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Check, RotateCcw, X, Clock3, Clock } from 'lucide-react';
-import { formatTime12h } from '../data/sampleData';
+import { Plus, Pencil, Trash2, Check, Sparkles, Clock3, Clock } from 'lucide-react';
+import { formatTime12h, getCurrentTimeHHMM } from '../data/sampleData';
 import { useCompanionStore } from '../hooks/useCompanionStore';
+import { ConfirmModal } from './ConfirmModal';
 import { PageCoverHeader } from './EditorialCovers';
+import { ModalShell } from './ModalShell';
 import type { RoutineCategory, RoutineItem } from '../types';
 
 interface DailyRoutineProps {
@@ -12,7 +14,7 @@ interface DailyRoutineProps {
   onToggleRoutine: (id: string) => void;
   onDeleteRoutine: (id: string) => void;
   onClearCheckmarks: () => void;
-  onResetDefaultRoutine: () => void;
+  onLoadStarterRoutine: () => void;
 }
 
 const ROUTINE_CATEGORIES: RoutineCategory[] = [
@@ -24,6 +26,19 @@ const ROUTINE_CATEGORIES: RoutineCategory[] = [
   'Evening',
 ];
 
+function computeDurationLabel(startHHMM: string, nextHHMM?: string): string | null {
+  if (!startHHMM || !nextHHMM) return null;
+  const [h1, m1] = startHHMM.split(':').map(Number);
+  const [h2, m2] = nextHHMM.split(':').map(Number);
+  if ([h1, m1, h2, m2].some(Number.isNaN)) return null;
+  const diff = h2 * 60 + m2 - (h1 * 60 + m1);
+  if (diff <= 0 || diff > 720) return null;
+  if (diff < 60) return `${diff}m`;
+  const hrs = Math.floor(diff / 60);
+  const rem = diff % 60;
+  return rem === 0 ? `${hrs}h` : `${hrs}h ${rem}m`;
+}
+
 export function DailyRoutine({
   routine,
   onAddRoutine,
@@ -31,18 +46,20 @@ export function DailyRoutine({
   onToggleRoutine,
   onDeleteRoutine,
   onClearCheckmarks,
-  onResetDefaultRoutine,
+  onLoadStarterRoutine,
 }: DailyRoutineProps) {
   const { companion } = useCompanionStore();
-  const [quickTime, setQuickTime] = useState('14:00');
+  const [quickTime, setQuickTime] = useState('09:00');
   const [quickTitle, setQuickTitle] = useState('');
-  const [quickCat, setQuickCat] = useState<RoutineCategory>('Study');
+  const [quickCat, setQuickCat] = useState<RoutineCategory>('Morning');
+
+  const [confirmTemplateOpen, setConfirmTemplateOpen] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<RoutineItem | null>(null);
   const [time, setTime] = useState('09:00');
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<RoutineCategory>('Study');
+  const [category, setCategory] = useState<RoutineCategory>('Morning');
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState('');
 
@@ -51,10 +68,12 @@ export function DailyRoutine({
     [routine],
   );
 
-  const nextBlockId = useMemo(
-    () => sortedRoutine.find((r) => !r.completed)?.id ?? null,
-    [sortedRoutine],
-  );
+  // Real-time Up Next calculation comparing against current clock time
+  const nextBlockId = useMemo(() => {
+    const nowHHMM = getCurrentTimeHHMM();
+    const upcomingIncomplete = sortedRoutine.find((r) => !r.completed && r.time >= nowHHMM);
+    return (upcomingIncomplete ?? sortedRoutine.find((r) => !r.completed))?.id ?? null;
+  }, [sortedRoutine]);
 
   const completedCount = routine.filter((r) => r.completed).length;
   const pct = routine.length === 0 ? 0 : Math.round((completedCount / routine.length) * 100);
@@ -68,6 +87,14 @@ export function DailyRoutine({
       category: quickCat,
     });
     setQuickTitle('');
+  };
+
+  const handleStarterTemplateRequest = () => {
+    if (routine.length > 0) {
+      setConfirmTemplateOpen(true);
+    } else {
+      onLoadStarterRoutine();
+    }
   };
 
   const openEditModal = (item: RoutineItem) => {
@@ -110,9 +137,10 @@ export function DailyRoutine({
     <div className="space-y-6">
       <PageCoverHeader
         mood={companion.bannerMood}
+        variant="routine"
         eyebrow="chronological flow"
         title="daily routine"
-        subtitle="Your editable daily timetable. Tap any block to check it off, or adjust times to fit your rhythm."
+        subtitle="Build your personal rhythm block by block. Checkmarks automatically reset fresh every new morning."
         icon={<Clock className="w-6 h-6" />}
         actions={
           <>
@@ -126,11 +154,11 @@ export function DailyRoutine({
             </button>
             <button
               type="button"
-              onClick={onResetDefaultRoutine}
+              onClick={handleStarterTemplateRequest}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] transition-colors whitespace-nowrap"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Default Routine</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Starter Template</span>
             </button>
           </>
         }
@@ -146,68 +174,75 @@ export function DailyRoutine({
           value={quickTime}
           onChange={(e) => setQuickTime(e.target.value)}
           aria-label="Activity time"
-          className="px-3 py-2.5 rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-xs font-mono text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+          className="min-h-[42px] px-3 py-2 rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-xs font-mono text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
         />
         <input
           type="text"
           value={quickTitle}
           onChange={(e) => setQuickTitle(e.target.value)}
-          placeholder="Add an activity to your timetable..."
+          placeholder="Add a routine block (e.g., Morning walk, Deep study)..."
           aria-label="New routine activity"
-          className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-sm text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+          className="flex-1 min-h-[42px] px-3.5 py-2 rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-sm text-[#292522] dark:text-[#F3EFEA] placeholder:text-[#A69A8D] dark:placeholder:text-[#78716A] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
         />
-        <select
-          value={quickCat}
-          onChange={(e) => setQuickCat(e.target.value as RoutineCategory)}
-          aria-label="Activity category"
-          className="px-3 py-2.5 rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-xs text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
-        >
-          {ROUTINE_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <button
-          type="submit"
-          disabled={!quickTitle.trim()}
-          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] disabled:opacity-40 transition-colors whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <select
+            value={quickCat}
+            onChange={(e) => setQuickCat(e.target.value as RoutineCategory)}
+            aria-label="Activity category"
+            className="flex-1 sm:flex-none min-h-[42px] px-3 py-2 rounded-xl bg-[#F8F5F0] dark:bg-[#161616] border border-[#E6DFD5] dark:border-[#2E2C29] text-xs text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+          >
+            {ROUTINE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            disabled={!quickTitle.trim()}
+            className="min-h-[42px] inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] disabled:opacity-40 transition-colors whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add</span>
+          </button>
+        </div>
       </form>
 
       {/* Progress Line */}
-      <div className="flex items-center gap-3.5 px-1">
-        <div className="w-full max-w-xs h-2 rounded-full bg-[#EAE2D6] dark:bg-[#2A2825] overflow-hidden">
-          <div
-            className="h-full rounded-full bg-[#B5853B] dark:bg-[#C89B54] transition-all duration-300"
-            style={{ width: `${pct}%` }}
-          />
+      {routine.length > 0 && (
+        <div className="flex items-center gap-3.5 px-1">
+          <div className="w-full max-w-xs h-2 rounded-full bg-[#EAE2D6] dark:bg-[#2A2825] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[#B5853B] dark:bg-[#C89B54] transition-all duration-300"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="text-xs font-mono text-[#6E6359] dark:text-[#A69E94] tabular-nums">
+            {completedCount}/{routine.length} completed ({pct}%)
+          </span>
         </div>
-        <span className="text-xs font-mono text-[#6E6359] dark:text-[#A69E94] tabular-nums">
-          {completedCount}/{routine.length} completed ({pct}%)
-        </span>
-      </div>
+      )}
 
       {/* Editorial Timeline Timetable */}
       <div className="rounded-3xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-4 sm:p-6 shadow-[0_1px_4px_rgba(41,37,34,0.04)] dark:shadow-none">
         {sortedRoutine.length === 0 ? (
           <div className="px-6 py-12 text-center">
-            <div className="mx-auto w-11 h-11 rounded-2xl bg-[#FAF3F1] dark:bg-[#262320] border border-[#EAD9D8] dark:border-[#493E33] flex items-center justify-center text-[#800020] dark:text-[#D4A85E]">
+            <div className="mx-auto w-12 h-12 rounded-2xl bg-[#FAF3F1] dark:bg-[#262320] border border-[#EAD9D8] dark:border-[#493E33] flex items-center justify-center text-[#800020] dark:text-[#D4A85E]">
               <Clock3 className="w-5 h-5" />
             </div>
-            <h2 className="mt-3 text-base font-medium text-[#292522] dark:text-[#F3EFEA]">Timetable is empty</h2>
-            <p className="mt-1 text-sm text-[#6E6359] dark:text-[#A69E94]">
-              Add activities above or restore the default 9:00 AM – 10:30 PM routine.
+            <h2 className="mt-3.5 font-display text-xl font-medium text-[#292522] dark:text-[#F3EFEA]">
+              Design your ideal daily flow
+            </h2>
+            <p className="mt-1.5 text-sm text-[#6E6359] dark:text-[#A69E94] max-w-md mx-auto">
+              Add your first morning, work, or wind-down block above, or start from a gentle 7-block template and customize it.
             </p>
             <button
               type="button"
-              onClick={onResetDefaultRoutine}
-              className="mt-4 px-4 py-2 rounded-xl text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] transition-colors"
+              onClick={onLoadStarterRoutine}
+              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] transition-colors"
             >
-              Restore Default Routine
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Use Gentle Starter Routine</span>
             </button>
           </div>
         ) : (
@@ -215,6 +250,7 @@ export function DailyRoutine({
             {sortedRoutine.map((item, idx) => {
               const isUpNext = item.id === nextBlockId;
               const isLast = idx === sortedRoutine.length - 1;
+              const duration = computeDurationLabel(item.time, sortedRoutine[idx + 1]?.time);
               return (
                 <div
                   key={item.id}
@@ -265,16 +301,24 @@ export function DailyRoutine({
                           {item.title}
                         </span>
                         {isUpNext && (
-                          <span className="text-xs font-medium text-[#800020] dark:text-[#D4A85E]">· up next</span>
+                          <span className="text-xs font-medium text-[#800020] dark:text-[#D4A85E]">
+                            · up next
+                          </span>
                         )}
                       </div>
-                      {(item.notes || item.category) && (
+                      {(item.notes || item.category || duration) && (
                         <p
                           className={`mt-0.5 sm:pl-[92px] text-xs ${
                             item.completed ? 'text-[#A69A8D] dark:text-[#6E6760]' : 'text-[#6E6359] dark:text-[#A69E94]'
                           }`}
                         >
                           <span>{item.category}</span>
+                          {duration && (
+                            <>
+                              <span aria-hidden="true" className="text-[#A69A8D] dark:text-[#5C5650]"> · </span>
+                              <span className="font-mono">{duration}</span>
+                            </>
+                          )}
                           {item.notes && (
                             <>
                               <span aria-hidden="true" className="text-[#A69A8D] dark:text-[#5C5650]"> · </span>
@@ -312,112 +356,107 @@ export function DailyRoutine({
       </div>
 
       {/* Edit Modal */}
-      {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#292522]/35 dark:bg-black/65 backdrop-blur-[2px] px-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="routine-modal-title"
-        >
-          <div className="w-full max-w-md rounded-3xl bg-[#FFFDF9] dark:bg-[#1E1E1E] border border-[#E6DFD5] dark:border-[#2E2C29] p-6 shadow-xl">
-            <div className="flex items-center justify-between gap-4">
-              <h2 id="routine-modal-title" className="text-xl font-medium text-[#292522] dark:text-[#F3EFEA]">
-                Edit Routine Block
-              </h2>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                aria-label="Close modal"
-                className="p-1.5 rounded-lg text-[#6E6359] dark:text-[#A69E94] hover:text-[#292522] dark:hover:text-[#F3EFEA] hover:bg-[#F8F5F0] dark:hover:bg-[#262523] transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSave} className="mt-4 space-y-4">
-              <div>
-                <label htmlFor="rt-title" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
-                  Activity
-                </label>
-                <input
-                  id="rt-title"
-                  type="text"
-                  value={title}
-                  onChange={(e) => {
-                    setTitle(e.target.value);
-                    if (formError) setFormError('');
-                  }}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
-                  autoFocus
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="rt-time" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
-                    Time
-                  </label>
-                  <input
-                    id="rt-time"
-                    type="time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm font-mono text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="rt-cat" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
-                    Category
-                  </label>
-                  <select
-                    id="rt-cat"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as RoutineCategory)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
-                  >
-                    {ROUTINE_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="rt-notes" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
-                  Notes (optional)
-                </label>
-                <input
-                  id="rt-notes"
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
-                />
-              </div>
-
-              {formError && <p className="text-xs text-[#800020] dark:text-[#E58A9B]">{formError}</p>}
-
-              <div className="pt-2 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-sm font-medium border border-[#E6DFD5] dark:border-[#2E2C29] text-[#292522] dark:text-[#F3EFEA] hover:bg-[#F8F5F0] dark:hover:bg-[#262523] transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl text-sm font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] transition-colors"
-                >
-                  Save Changes
-                </button>
-              </div>
-            </form>
+      <ModalShell
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Edit Routine Block"
+        titleId="routine-modal-title"
+        maxWidthClass="max-w-md"
+      >
+        <form onSubmit={handleSave} className="mt-4 space-y-4">
+          <div>
+            <label htmlFor="rt-title" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
+              Activity
+            </label>
+            <input
+              id="rt-title"
+              type="text"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (formError) setFormError('');
+              }}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+              autoFocus
+            />
           </div>
-        </div>
-      )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="rt-time" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
+                Time
+              </label>
+              <input
+                id="rt-time"
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm font-mono text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+              />
+            </div>
+            <div>
+              <label htmlFor="rt-cat" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
+                Category
+              </label>
+              <select
+                id="rt-cat"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as RoutineCategory)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+              >
+                {ROUTINE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="rt-notes" className="block text-xs font-medium text-[#4F4740] dark:text-[#CFC7BE] mb-1.5">
+              Notes (optional)
+            </label>
+            <input
+              id="rt-notes"
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6DFD5] dark:border-[#2E2C29] bg-[#F8F5F0]/70 dark:bg-[#161616] text-sm text-[#292522] dark:text-[#F3EFEA] focus:outline-none focus:border-[#800020] dark:focus:border-[#D4A85E]"
+            />
+          </div>
+
+          {formError && <p className="text-xs text-[#800020] dark:text-[#E58A9B]">{formError}</p>}
+
+          <div className="pt-2 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setModalOpen(false)}
+              className="px-4 py-2 rounded-xl text-sm font-medium border border-[#E6DFD5] dark:border-[#2E2C29] text-[#292522] dark:text-[#F3EFEA] hover:bg-[#F8F5F0] dark:hover:bg-[#262523] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-xl text-sm font-medium bg-[#800020] dark:bg-[#C89B54] text-[#FFFDF9] dark:text-[#141414] hover:bg-[#66001A] dark:hover:bg-[#D6AB65] transition-colors"
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </ModalShell>
+
+      <ConfirmModal
+        open={confirmTemplateOpen}
+        title="Replace Current Routine?"
+        description="Loading the gentle starter routine will replace your existing routine blocks. Your tasks, habits, and notes will not be affected."
+        confirmLabel="Load Starter Routine"
+        onCancel={() => setConfirmTemplateOpen(false)}
+        onConfirm={() => {
+          onLoadStarterRoutine();
+          setConfirmTemplateOpen(false);
+        }}
+      />
     </div>
   );
 }

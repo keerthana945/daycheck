@@ -10,13 +10,15 @@ export type Weekday = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
 
 export type Priority = 'High' | 'Medium' | 'Low';
 
-export type TaskCategory =
+export type DefaultTaskCategory =
   | 'Study'
   | 'UX Design'
   | 'Career'
   | 'Personal'
   | 'Home'
   | 'Health';
+
+export type TaskCategory = DefaultTaskCategory | (string & {});
 
 export type TaskFilter = 'All' | 'Pending' | 'Completed' | 'High Priority';
 
@@ -43,7 +45,10 @@ export interface RoutineItem {
   notes?: string;
 }
 
-export type HabitKey = 'water' | 'exercise' | 'studying' | 'reading' | 'english';
+export type DefaultHabitKey = 'water' | 'exercise' | 'studying' | 'reading' | 'english';
+export type HabitKey = DefaultHabitKey | (string & {});
+
+export type PlantStyle = 'fern' | 'olive' | 'camellia' | 'peony' | 'lavender';
 
 export interface Habit {
   key: HabitKey;
@@ -54,6 +59,8 @@ export interface Habit {
   targetValue: number;
   minTarget: number;
   maxTarget: number;
+  plantStyle?: PlantStyle;
+  isCustom?: boolean;
   /** 7 booleans representing Mon..Sun of the current week */
   weeklyHistory: [boolean, boolean, boolean, boolean, boolean, boolean, boolean];
 }
@@ -67,6 +74,7 @@ export interface Note {
   category: NoteCategory;
   reminderDate?: string;
   completed?: boolean;
+  pinned?: boolean;
   updatedAt: string;
 }
 
@@ -75,6 +83,9 @@ export interface MyDayState {
   routine: RoutineItem[];
   habits: Habit[];
   notes: Note[];
+  customCategories?: string[];
+  lastOpenedDate?: string; // YYYY-MM-DD for automatic daily rollover
+  lastOpenedWeekStart?: string; // Monday YYYY-MM-DD for weekly habit rollover
 }
 
 export interface ToastItem {
@@ -107,3 +118,25 @@ export interface JournalEntry {
   createdAt: string;
 }
 
+export interface FocusSession {
+  id: string;
+  date: string; // YYYY-MM-DD
+  minutes: number;
+  taskId?: string;
+  taskTitle?: string;
+  completedAt: string;
+}
+
+export interface MorningResetRecord {
+  date: string; // YYYY-MM-DD
+  intention: string;
+  rolledOverCount: number;
+  completedAt: string;
+}
+
+export interface EveningReflectionRecord {
+  date: string; // YYYY-MM-DD
+  highlight: string;
+  gratitude: string;
+  completedAt: string;
+}
